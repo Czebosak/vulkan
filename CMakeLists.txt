@@ -14,6 +14,7 @@ add_executable(Vulkan "${MY_SOURCES}")
 
 target_include_directories(Vulkan PRIVATE "src")
 target_include_directories(Vulkan PRIVATE "external/fastnoiselite")
+target_include_directories(Vulkan PRIVATE "external/vma/include")
 
 target_link_libraries(Vulkan PRIVATE glfw Vulkan::Vulkan)
 
