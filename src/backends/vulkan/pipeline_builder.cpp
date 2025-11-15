@@ -3,58 +3,63 @@
 #include <vulkan/vulkan.hpp>
 
 namespace hayvk::builders {
-    std::optional<vk::Pipeline> PipelineBuilder::build(vk::Device device) {
-        vk::PipelineViewportStateCreateInfo viewport_state{};
-        viewport_state.setPNext(nullptr)
-                      .setViewportCount(1)
-                      .setScissorCount(1);
+    std::optional<VkPipeline> PipelineBuilder::build(VkDevice device) {
+        VkPipelineViewportStateCreateInfo viewport_state = {
+            .viewportCount = 1,
+            .scissorCount = 1,
+        };
 
-        vk::PipelineColorBlendStateCreateInfo color_blending{};
-        color_blending.setLogicOpEnable(VK_FALSE)
-                      .setLogicOp(vk::LogicOp::eCopy)
-                      .setAttachmentCount(1)
-                      .setPAttachments(&color_blend_attachment);
+        VkPipelineColorBlendStateCreateInfo color_blending = {
+            .logicOpEnable = VK_FALSE,
+            .logicOp = VK_LOGIC_OP_COPY,
+            .attachmentCount = 1,
+            .pAttachments = &color_blend_attachment,
+        };
 
-        vk::PipelineVertexInputStateCreateInfo vertex_input_info{};
+        VkPipelineVertexInputStateCreateInfo vertex_input_info{};
 
-        vk::DynamicState state[] = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
+        VkDynamicState state[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
-        vk::PipelineDynamicStateCreateInfo dynamic_info({}, 2, &state[0]);
+        VkPipelineDynamicStateCreateInfo dynamic_info {
+            .dynamicStateCount = 2,
+            .pDynamicStates = &state[0],
+        };
 
-        vk::PipelineLayout pipeline_layout;
-        //vk::Result result = ;
-        if (device.createPipelineLayout(&pipeline_layout_create_info, nullptr, &pipeline_layout) != vk::Result::eSuccess) {
+        VkPipelineLayout pipeline_layout;
+        //vkResult result = ;
+        if (vkCreatePipelineLayout(device, &pipeline_layout_create_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
         }
 
-        vk::PipelineRenderingCreateInfo render_info{};
-        
-        render_info.setColorAttachmentCount(1)
-                   .setPColorAttachmentFormats(&color_attachment_format);
+        VkPipelineRenderingCreateInfo render_info = {
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &color_attachment_format,
+        };
 
-        vk::GraphicsPipelineCreateInfo pipeline_info{};
-        pipeline_info.setPNext(&render_info)
-                     .setStageCount((uint32_t)shader_stages.size())
-                     .setPStages(shader_stages.data())
-                     .setLayout(pipeline_layout)
-                     .setPVertexInputState(&vertex_input_info)
-                     .setPInputAssemblyState(&input_assembly)
-                     .setPViewportState(&viewport_state)
-                     .setPRasterizationState(&rasterizer)
-                     .setPMultisampleState(&multisampling)
-                     .setPDepthStencilState(nullptr)
-                     .setPColorBlendState(&color_blending)
-                     //.pDepthStencilState(&depth_stencil)
-                     .setPDynamicState(&dynamic_info);
+        VkGraphicsPipelineCreateInfo pipeline_info = {
+            .pNext = &render_info,
+            .stageCount = (uint32_t)shader_stages.size(),
+            .pStages = shader_stages.data(),
+            .pVertexInputState = &vertex_input_info,
+            .pInputAssemblyState = &input_assembly,
+            .pViewportState = &viewport_state,
+            .pRasterizationState = &rasterizer,
+            .pMultisampleState = &multisampling,
+            .pDepthStencilState = nullptr,
+            .pColorBlendState = &color_blending,
+            //.pDepthStencilState(&depth_stencil)
+            .pDynamicState = &dynamic_info,
+            .layout = pipeline_layout,
+        };
 
-        vk::Pipeline pipeline;
-        vk::Result result = device.createGraphicsPipelines({}, 1, &pipeline_info, nullptr, &pipeline);
-        if (result != vk::Result::eSuccess) return VK_NULL_HANDLE;
+        VkPipeline pipeline;
+        VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline);
+        if (result != VK_SUCCESS) return VK_NULL_HANDLE;
 
         return pipeline;
     }
 
-    PipelineBuilder& PipelineBuilder::set_shaders(vk::ShaderModule vertex_shader, vk::ShaderModule fragment_shader, const char* entry) {
+    PipelineBuilder& PipelineBuilder::set_shaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader, const char* entry) {
         shader_stages.clear();
 
         // Vertex Shader
@@ -111,3 +116,42 @@ maybe try dsiabling blending
                 | VK_COLOR_COMPONENT_A_BIT,
 
 */
+
+std::optional<VkShaderModule> vkutil::load_shader_module(VkDevice device, const char* file_path) {
+    // open the file. With cursor at the end
+    std::ifstream file(file_path, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open()) return std::nullopt;
+
+    // find what the size of the file is by looking up the location of the cursor
+    // because the cursor is at the end, it gives the size directly in bytes
+    size_t file_size = (size_t)file.tellg();
+
+    // spirv expects the buffer to be on uint32, so make sure to reserve a int
+    // vector big enough for the entire file
+    std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
+
+    // put file cursor at beginning
+    file.seekg(0);
+
+    // load the entire file into the buffer
+    file.read((char*)buffer.data(), file_size);
+
+    // now that the file is loaded into the buffer, we can close it
+    file.close();
+
+    // create a new shader module, using the buffer we loaded
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .pNext = nullptr,
+        // codeSize has to be in bytes, so multply the ints in the buffer by size of
+        // int to know the real size of the buffer
+        .codeSize = buffer.size() * sizeof(uint32_t),
+        .pCode = buffer.data(),
+    };
+
+    // check that the creation goes well.
+    VkShaderModule shader_module;
+    if (vkCreateShaderModule(device, &create_info, nullptr, &shader_module) != VK_SUCCESS) return std::nullopt;
+    return std::make_optional(shader_module);
+}

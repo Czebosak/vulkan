@@ -2,21 +2,33 @@ cmake_minimum_required(VERSION "3.19.2")
 
 option(PRODUCTION_BUILD "Build in production mode" OFF)
 
-project(Vulkan)
+project(VoxelGame)
 set(CMAKE_CXX_STANDARD 23)
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(fmt REQUIRED)
 
-file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/external/vkbootstrap/*.cpp")
 
-add_executable(Vulkan "${MY_SOURCES}")
+#if(NOT ENABLE_FEATURE_B)
+#    file(GLOB_RECURSE FEATURE_B_FILES CONFIGURE_DEPENDS src/featureB/*.cpp src/featureB/*.h)
+#    list(REMOVE_ITEM SRC_FILES ${FEATURE_B_FILES})
+#endif()
 
-target_include_directories(Vulkan PRIVATE "src")
-target_include_directories(Vulkan PRIVATE "external/fastnoiselite")
-target_include_directories(Vulkan PRIVATE "external/vma/include")
+add_executable(VoxelGame "${MY_SOURCES}")
 
-target_link_libraries(Vulkan PRIVATE glfw Vulkan::Vulkan)
+target_include_directories(VoxelGame PRIVATE "src")
+target_include_directories(VoxelGame PRIVATE "external/fastnoiselite")
+target_include_directories(VoxelGame PRIVATE "external/vma/include")
+target_include_directories(VoxelGame PRIVATE "external/vkbootstrap")
+
+#if(USE_FEATURE_X)
+    #add_definitions(-DFEATURE_X_ENABLED)
+    #target_sources(myTarget PRIVATE feature_x.cpp)
+#else()
+target_link_libraries(VoxelGame PRIVATE glfw Vulkan::Vulkan fmt::fmt)
+#endif()
 
 if(PRODUCTION_BUILD)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)

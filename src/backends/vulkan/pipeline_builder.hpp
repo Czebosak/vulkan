@@ -1,26 +1,31 @@
 #pragma once
 
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 #include <vector>
 #include <optional>
+#include <fstream>
 
 namespace hayvk::builders {
     class PipelineBuilder {
     public:
-        std::vector<vk::PipelineShaderStageCreateInfo> shader_stages;
+        std::vector<VkPipelineShaderStageCreateInfo> shader_stages;
     
-        vk::PipelineInputAssemblyStateCreateInfo input_assembly;
-        vk::PipelineRasterizationStateCreateInfo rasterizer;
-        vk::PipelineColorBlendAttachmentState color_blend_attachment;
-        vk::PipelineMultisampleStateCreateInfo multisampling;
-        vk::PipelineLayoutCreateInfo pipeline_layout_create_info;
-        std::optional<vk::PipelineDepthStencilStateCreateInfo> depth_stencil;
-        vk::Format color_attachment_format;
+        VkPipelineInputAssemblyStateCreateInfo input_assembly;
+        VkPipelineRasterizationStateCreateInfo rasterizer;
+        VkPipelineColorBlendAttachmentState color_blend_attachment;
+        VkPipelineMultisampleStateCreateInfo multisampling;
+        VkPipelineLayoutCreateInfo pipeline_layout_create_info;
+        std::optional<VkPipelineDepthStencilStateCreateInfo> depth_stencil;
+        VkFormat color_attachment_format;
 
-        std::optional<vk::Pipeline> build(vk::Device device);
+        std::optional<VkPipeline> build(VkDevice device);
 
-        PipelineBuilder& set_shaders(vk::ShaderModule vertex_shader, vk::ShaderModule fragment_shader, const char* entry = "main");
+        PipelineBuilder& set_shaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader, const char* entry = "main");
         PipelineBuilder& set_multisampling_none();
     };
+}
+
+namespace vkutil {
+    std::optional<VkShaderModule> load_shader_module(VkDevice device, const char* file_path);
 }
