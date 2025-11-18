@@ -44,6 +44,19 @@ namespace vkinit {
         return sub_image;
     }
 
+    VkCommandBufferAllocateInfo command_buffer_allocate_info(VkCommandPool pool, uint32_t count) {
+        VkCommandBufferAllocateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+
+            .commandPool = pool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = count,
+        };
+
+        return info;
+    }
+
     VkSemaphoreSubmitInfo semaphore_submit_info(VkPipelineStageFlags2 stage_mask, VkSemaphore semaphore) {
         VkSemaphoreSubmitInfo submit_info = {
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -72,15 +85,48 @@ namespace vkinit {
         VkSubmitInfo2 submit_info = {
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
             .pNext = nullptr,
-            .waitSemaphoreInfoCount = wait_semaphore_info == nullptr ? 0 : 1,
+            .waitSemaphoreInfoCount = uint32_t(wait_semaphore_info == nullptr) ? uint32_t(0) : uint32_t(1),
             .pWaitSemaphoreInfos = wait_semaphore_info,
             .commandBufferInfoCount = 1,
             .pCommandBufferInfos = cmd,
-            .signalSemaphoreInfoCount = signal_semaphore_info == nullptr ? 0 : 1,
+            .signalSemaphoreInfoCount = uint32_t(signal_semaphore_info == nullptr) ? uint32_t(0) : uint32_t(1),
             .pSignalSemaphoreInfos = signal_semaphore_info,
         };
 
         return submit_info;
+    }
+
+    VkRenderingAttachmentInfo attachment_info(VkImageView view, VkClearValue* clear, VkImageLayout layout) {
+        VkRenderingAttachmentInfo color_attachment {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .pNext = nullptr,
+            .imageView = view,
+            .imageLayout = layout,
+            .loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        };
+
+        if (clear) {
+            color_attachment.clearValue = *clear;
+        }
+
+        return color_attachment;
+    }
+
+    VkRenderingInfo rendering_info(VkExtent2D render_extent, VkRenderingAttachmentInfo* color_attachment, VkRenderingAttachmentInfo* depth_attachment) {
+        VkRenderingInfo render_info = {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .pNext = nullptr,
+
+            .renderArea = VkRect2D { VkOffset2D { 0, 0 }, render_extent },
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = color_attachment,
+            .pDepthAttachment = depth_attachment,
+            .pStencilAttachment = nullptr,
+        };
+
+        return render_info;
     }
 
     VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usage_flags, VkExtent3D extent) {

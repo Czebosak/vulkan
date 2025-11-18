@@ -50,17 +50,21 @@ private:
 
 	static constexpr uint FRAME_OVERLAP = 2;
 
+	uint frame_number = 0;
+
+	constexpr FrameData& get_current_frame() { return frames[frame_number % FRAME_OVERLAP]; };
+
 	FrameData frames[FRAME_OVERLAP];
 
 	VkQueue graphics_queue;
 	uint32_t graphics_queue_family;
 
-	uint frame_number = 0;
-
-	constexpr FrameData& get_current_frame() { return frames[frame_number % FRAME_OVERLAP]; };
-
 	VkPipeline gradient_pipeline;
 	VkPipelineLayout gradient_pipeline_layout;
+
+    VkFence imm_fence;
+    VkCommandBuffer imm_command_buffer;
+    VkCommandPool imm_command_pool;
 
     uint32_t init_vulkan(GLFWwindow* window);
 	void init_swapchain();
@@ -69,11 +73,15 @@ private:
 	void init_descriptors();
 	void init_background_pipelines();
 	void init_pipelines();
+	void init_imgui();
 
     void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
 
+	void draw_imgui(VkCommandBuffer cmd, VkImageView target_image_view);
 	void draw_background(VkCommandBuffer cmd);
+
+	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 public:
 	uint32_t init();
 
