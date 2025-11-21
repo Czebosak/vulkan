@@ -32,8 +32,9 @@ private:
     VkSwapchainKHR swapchain;
 	VkFormat swapchain_image_format;
 
-	std::vector<VkImage> swapchain_images;
-	std::vector<VkImageView> swapchain_image_views;
+	/* std::vector<VkImage> swapchain_images;
+	std::vector<VkImageView> swapchain_image_views; */
+	std::vector<SwapchainImage> swapchain_images;
 	VkExtent2D swapchain_extent;
 
     DeletionQueue deletion_queue;
@@ -52,7 +53,7 @@ private:
 
 	uint frame_number = 0;
 
-	constexpr FrameData& get_current_frame() { return frames[frame_number % FRAME_OVERLAP]; };
+	inline FrameData& get_current_frame() { return frames[frame_number % FRAME_OVERLAP]; };
 
 	FrameData frames[FRAME_OVERLAP];
 

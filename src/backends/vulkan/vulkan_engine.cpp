@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <thread>
+#include <ranges>
 
 #include <backends/vulkan/initializers.hpp>
 #include <backends/vulkan/images.hpp>
@@ -184,8 +185,15 @@ void Engine::create_swapchain(uint32_t width, uint32_t height) {
 	swapchain_extent = vkb_swapchain.extent;
 	//store swapchain and its related images
 	swapchain = vkb_swapchain.swapchain;
-	swapchain_images = vkb_swapchain.get_images().value();
-	swapchain_image_views = vkb_swapchain.get_image_views().value();
+
+	auto image_handles = vkb_swapchain.get_images().value();
+	auto image_views = vkb_swapchain.get_image_views().value();
+
+	swapchain_images.reserve(image_handles.size());
+	
+	for (const auto& [handle, image_view] : std::views::zip(image_handles, image_views)) {
+		swapchain_images.emplace_back(handle, image_view);
+	}
 }
 
 void Engine::init_commands() {
@@ -238,6 +246,10 @@ void Engine::init_sync_structures() {
 
 		VK_CHECK(vkCreateSemaphore(device, &semaphore_create_info, nullptr, &frames[i].swapchain_semaphore));
 		VK_CHECK(vkCreateSemaphore(device, &semaphore_create_info, nullptr, &frames[i].render_semaphore));
+	}
+
+	for (SwapchainImage& swapchain_image : swapchain_images) {
+		VK_CHECK(vkCreateSemaphore(device, &semaphore_create_info, nullptr, &swapchain_image.submit_semaphore));
 	}
 
 	VK_CHECK(vkCreateFence(device, &fence_create_info, nullptr, &imm_fence));
@@ -510,30 +522,31 @@ void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& functio
 }
 
 void Engine::draw() {
-	// wait until the gpu has finished rendering the last frame. Timeout of 1 second
-	VK_CHECK(vkWaitForFences(device, 1, &get_current_frame().render_fence, true, 1000000000));
+	FrameData& current_frame = get_current_frame();
 
-	get_current_frame().deletion_queue.flush();
-	//VK_CHECK(vkResetFences(device, 1, &get_current_frame().render_fence));
+	// wait until the gpu has finished rendering the last frame. Timeout of 1 second
+	VK_CHECK(vkWaitForFences(device, 1, &current_frame.render_fence, true, 1000000000));
+
+	current_frame.deletion_queue.flush();
 
     // request image from the swapchain
-	uint32_t swapchain_image_index;
-	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, 1000000000, get_current_frame().swapchain_semaphore, nullptr, &swapchain_image_index));
+	uint32_t image_index;
+	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, 1000000000, current_frame.swapchain_semaphore, nullptr, &image_index));
 
-	VK_CHECK(vkResetFences(device, 1, &get_current_frame().render_fence));
+	VK_CHECK(vkResetFences(device, 1, &current_frame.render_fence));
 
-	VK_CHECK(vkResetCommandBuffer(get_current_frame().main_command_buffer, 0));
+	VK_CHECK(vkResetCommandBuffer(current_frame.main_command_buffer, 0));
 
-	VkCommandBuffer cmd = get_current_frame().main_command_buffer;
-
-	//VK_CHECK(vkResetCommandBuffer(cmd, 0));
+	VkCommandBuffer cmd = current_frame.main_command_buffer;
 
 	VkCommandBufferBeginInfo cmd_begin_info = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	draw_extent.width = draw_image.image_extent.width;
 	draw_extent.height = draw_image.image_extent.height;
 
-	VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));	
+	VkSemaphore& submit_semaphore = swapchain_images[image_index].submit_semaphore;
+
+	VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));
 
 	// transition our main draw image into general layout so we can write into it
 	// we will overwrite it all so we dont care about what was the older layout
@@ -543,18 +556,18 @@ void Engine::draw() {
 
 	//transition the draw image and the swapchain image into their correct transfer layouts
 	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	vkutil::transition_image(cmd, swapchain_images[image_index].handle, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// execute a copy from the draw image into the swapchain
-	vkutil::copy_image_to_image(cmd, draw_image.image, swapchain_images[swapchain_image_index], draw_extent, swapchain_extent);
+	vkutil::copy_image_to_image(cmd, draw_image.image, swapchain_images[image_index].handle, draw_extent, swapchain_extent);
 
-	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transition_image(cmd, swapchain_images[image_index].handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	//draw imgui into the swapchain image
-	draw_imgui(cmd, swapchain_image_views[swapchain_image_index]);
+	draw_imgui(cmd, swapchain_images[image_index].view);
 
 	// set swapchain image layout to Present so we can show it on the screen
-	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	vkutil::transition_image(cmd, swapchain_images[image_index].handle, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	//finalize the command buffer (we can no longer add commands, but it can now be executed)
 	VK_CHECK(vkEndCommandBuffer(cmd));
@@ -564,14 +577,14 @@ void Engine::draw() {
 	//we will signal the _renderSemaphore, to signal that rendering has finished
 	VkCommandBufferSubmitInfo cmd_info = vkinit::command_buffer_submit_info(cmd);	
 	
-	VkSemaphoreSubmitInfo wait_info = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, get_current_frame().swapchain_semaphore);
-	VkSemaphoreSubmitInfo signal_info = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, get_current_frame().render_semaphore);	
+	VkSemaphoreSubmitInfo wait_info = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, current_frame.render_semaphore);
+	VkSemaphoreSubmitInfo signal_info = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, submit_semaphore);
 	
-	VkSubmitInfo2 submit = vkinit::submit_info(&cmd_info, &signal_info, &wait_info);	
+	VkSubmitInfo2 submit = vkinit::submit_info(&cmd_info, &signal_info, &wait_info);
 
 	//submit command buffer to the queue and execute it.
 	// _renderFence will now block until the graphic commands finish execution
-	VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit, get_current_frame().render_fence));
+	VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit, current_frame.render_fence));
 
 	//prepare present
 	// this will put the image we just rendered to into the visible window.
@@ -579,12 +592,11 @@ void Engine::draw() {
 	// as its necessary that drawing commands have finished before the image is displayed to the user
 	VkPresentInfoKHR present_info = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-		.pNext = nullptr,
 		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = &get_current_frame().render_semaphore,
+		.pWaitSemaphores = &submit_semaphore,
 		.swapchainCount = 1,
 		.pSwapchains = &swapchain,
-		.pImageIndices = &swapchain_image_index,
+		.pImageIndices = &image_index,
 	};
 
 	VK_CHECK(vkQueuePresentKHR(graphics_queue, &present_info));
@@ -621,7 +633,7 @@ void Engine::clean_up() {
 void Engine::destroy_swapchain() {
 	vkDestroySwapchainKHR(device, swapchain, nullptr);
 
-	for (int i = 0; i < swapchain_image_views.size(); i++) {
-		vkDestroyImageView(device, swapchain_image_views[i], nullptr);
+	for (int i = 0; i < swapchain_images.size(); i++) {
+		vkDestroyImageView(device, swapchain_images[i].view, nullptr);
 	}
 }
