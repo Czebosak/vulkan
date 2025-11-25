@@ -577,7 +577,7 @@ void Engine::draw() {
 	//we will signal the _renderSemaphore, to signal that rendering has finished
 	VkCommandBufferSubmitInfo cmd_info = vkinit::command_buffer_submit_info(cmd);	
 	
-	VkSemaphoreSubmitInfo wait_info = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, current_frame.render_semaphore);
+	VkSemaphoreSubmitInfo wait_info = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, current_frame.swapchain_semaphore);
 	VkSemaphoreSubmitInfo signal_info = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, submit_semaphore);
 	
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmd_info, &signal_info, &wait_info);
