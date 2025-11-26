@@ -298,16 +298,24 @@ void Engine::init_descriptors() {
 }
 
 void Engine::init_background_pipelines() {
+	VkPushConstantRange push_constant = {
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.offset = 0,
+		.size = sizeof(ComputePushConstants),
+	};
+
 	VkPipelineLayoutCreateInfo compute_layout = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = 1,
 		.pSetLayouts = &draw_image_descriptor_layout,
+    	.pushConstantRangeCount = 1,
+		.pPushConstantRanges = &push_constant,
 	};
 
 	VK_CHECK(vkCreatePipelineLayout(device, &compute_layout, nullptr, &gradient_pipeline_layout));
 
 	VkShaderModule compute_draw_shader;
-	auto compute_draw_shader_opt = vkutil::load_shader_module(device, "assets/gradient.spv");
+	auto compute_draw_shader_opt = vkutil::load_shader_module(device, "assets/gradient_color.spv");
 	if (compute_draw_shader_opt) {
 		compute_draw_shader = *compute_draw_shader_opt;
 	} else {
@@ -435,6 +443,9 @@ uint32_t Engine::init() {
 	init_pipelines();
 	init_imgui();
 
+	push_constants.data1 = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	push_constants.data2 = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+
     return 0;
 }
 
@@ -457,7 +468,12 @@ void Engine::run() {
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		ImGui::ShowDemoWindow();
+		ImGui::Begin("Epic");
+			ImGui::InputFloat4("data1", (float*)&push_constants.data1);
+			ImGui::InputFloat4("data2", (float*)&push_constants.data2);
+			ImGui::InputFloat4("data3", (float*)&push_constants.data3);
+			ImGui::InputFloat4("data4", (float*)&push_constants.data4);
+		ImGui::End();
 
 		ImGui::Render();
 
@@ -492,6 +508,12 @@ void Engine::draw_background(VkCommandBuffer cmd) {
 
 	// bind the descriptor set containing the draw image for the compute pipeline
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradient_pipeline_layout, 0, 1, &draw_image_descriptors, 0, nullptr);
+
+	/* ComputePushConstants pc;
+	pc.data1 = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	pc.data2 = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f); */
+
+	vkCmdPushConstants(cmd, gradient_pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &push_constants);
 
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
 	vkCmdDispatch(cmd, std::ceil(draw_extent.width / 16.0), std::ceil(draw_extent.height / 16.0), 1);
@@ -607,6 +629,8 @@ void Engine::draw() {
 void Engine::clean_up() {
 	vkDeviceWaitIdle(device);
 
+	deletion_queue.flush();
+
 	for (int i = 0; i < FRAME_OVERLAP; i++) {
 		//already written from before
 		vkDestroyCommandPool(device, frames[i].command_pool, nullptr);
@@ -615,6 +639,8 @@ void Engine::clean_up() {
 		vkDestroyFence(device, frames[i].render_fence, nullptr);
 		vkDestroySemaphore(device, frames[i].render_semaphore, nullptr);
 		vkDestroySemaphore(device ,frames[i].swapchain_semaphore, nullptr);
+
+		frames[i].deletion_queue.flush();
 	}
 
     destroy_swapchain();

@@ -6,6 +6,8 @@
 
 #include <VkBootstrap.h>
 
+#include <glm/glm.hpp>
+
 #include <vector>
 
 #include <backends/vulkan/types.hpp>
@@ -15,6 +17,13 @@ constexpr uint32_t WIDTH = 640*2;
 constexpr uint32_t HEIGHT = 480*2;
 
 constexpr bool ENABLE_VALIDATION_LAYERS = true;
+
+struct ComputePushConstants {
+	glm::vec4 data1;
+	glm::vec4 data2;
+	glm::vec4 data3;
+	glm::vec4 data4;
+};
 
 class Engine {
 private:
@@ -62,6 +71,8 @@ private:
 
 	VkPipeline gradient_pipeline;
 	VkPipelineLayout gradient_pipeline_layout;
+
+	ComputePushConstants push_constants;
 
     VkFence imm_fence;
     VkCommandBuffer imm_command_buffer;
