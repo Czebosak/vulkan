@@ -16,7 +16,7 @@ struct DescriptorLayoutBuilder {
 };
 
 struct DescriptorAllocator {
-    struct PoolSizeRatio{
+    struct PoolSizeRatio {
         VkDescriptorType type;
         float ratio;
     };

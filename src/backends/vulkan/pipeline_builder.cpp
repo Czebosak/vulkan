@@ -1,42 +1,37 @@
 #include "pipeline_builder.hpp"
 
-#include <vulkan/vulkan.hpp>
+#include <backends/vulkan/types.hpp>
 
 namespace hayvk::builders {
-    std::optional<VkPipeline> PipelineBuilder::build(VkDevice device) {
+    VkPipeline PipelineBuilder::build(VkDevice device) {
         VkPipelineViewportStateCreateInfo viewport_state = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            .pNext = nullptr,
             .viewportCount = 1,
             .scissorCount = 1,
         };
 
         VkPipelineColorBlendStateCreateInfo color_blending = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            .pNext = nullptr,
             .logicOpEnable = VK_FALSE,
             .logicOp = VK_LOGIC_OP_COPY,
             .attachmentCount = 1,
             .pAttachments = &color_blend_attachment,
         };
 
-        VkPipelineVertexInputStateCreateInfo vertex_input_info{};
+        VkPipelineVertexInputStateCreateInfo vertex_input_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
 
         VkDynamicState state[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
         VkPipelineDynamicStateCreateInfo dynamic_info {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
             .dynamicStateCount = 2,
             .pDynamicStates = &state[0],
         };
 
-        VkPipelineLayout pipeline_layout;
-        //vkResult result = ;
-        if (vkCreatePipelineLayout(device, &pipeline_layout_create_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create pipeline layout!");
-        }
-
-        VkPipelineRenderingCreateInfo render_info = {
-            .colorAttachmentCount = 1,
-            .pColorAttachmentFormats = &color_attachment_format,
-        };
-
         VkGraphicsPipelineCreateInfo pipeline_info = {
+            .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
             .pNext = &render_info,
             .stageCount = (uint32_t)shader_stages.size(),
             .pStages = shader_stages.data(),
@@ -45,16 +40,17 @@ namespace hayvk::builders {
             .pViewportState = &viewport_state,
             .pRasterizationState = &rasterizer,
             .pMultisampleState = &multisampling,
-            .pDepthStencilState = nullptr,
+            .pDepthStencilState = &depth_stencil,
             .pColorBlendState = &color_blending,
-            //.pDepthStencilState(&depth_stencil)
             .pDynamicState = &dynamic_info,
             .layout = pipeline_layout,
         };
 
         VkPipeline pipeline;
-        VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline);
-        if (result != VK_SUCCESS) return VK_NULL_HANDLE;
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline) != VK_SUCCESS) {
+            fmt::println("failed to create pipeline");
+            return VK_NULL_HANDLE;
+        }
 
         return pipeline;
     }
@@ -83,6 +79,27 @@ namespace hayvk::builders {
         return *this;
     }
 
+    PipelineBuilder& PipelineBuilder::set_input_topology(VkPrimitiveTopology topology) {
+        input_assembly.topology = topology;
+        input_assembly.primitiveRestartEnable = VK_FALSE;
+
+        return *this;
+    }
+
+    PipelineBuilder& PipelineBuilder::set_polygon_mode(VkPolygonMode mode) {
+        rasterizer.polygonMode = mode;
+        rasterizer.lineWidth = 1.f;
+        
+        return *this;
+    }
+
+    PipelineBuilder& PipelineBuilder::set_cull_mode(VkCullModeFlags cull_mode, VkFrontFace front_face) {
+        rasterizer.cullMode = cull_mode;
+        rasterizer.frontFace = front_face;
+
+        return *this;
+    }
+
     PipelineBuilder& PipelineBuilder::set_multisampling_none() {
         multisampling = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -92,6 +109,45 @@ namespace hayvk::builders {
             .pSampleMask = nullptr,
             .alphaToCoverageEnable = VK_FALSE,
             .alphaToOneEnable = VK_FALSE,
+        };
+
+        return *this;
+    }
+
+    PipelineBuilder& PipelineBuilder::disable_blending() {
+        // default write mask
+        color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        // no blending
+        color_blend_attachment.blendEnable = VK_FALSE;
+
+        return *this;
+    }
+
+    PipelineBuilder& PipelineBuilder::set_color_attachment_format(VkFormat format) {
+        color_attachment_format = format;
+        render_info.colorAttachmentCount = 1;
+        render_info.pColorAttachmentFormats = &color_attachment_format;
+
+        return *this;
+    }
+
+    PipelineBuilder& PipelineBuilder::set_depth_format(VkFormat format) {
+        render_info.depthAttachmentFormat = format;
+        
+        return *this;
+    }
+
+    PipelineBuilder& PipelineBuilder::disable_depthtest() {
+        VkPipelineDepthStencilStateCreateInfo {
+            .depthTestEnable = VK_FALSE,
+            .depthWriteEnable = VK_FALSE,
+            .depthCompareOp = VK_COMPARE_OP_NEVER,
+            .depthBoundsTestEnable = VK_FALSE,
+            .stencilTestEnable = VK_FALSE,
+            .front = {},
+            .back = {},
+            .minDepthBounds = 0.f,
+            .maxDepthBounds = 1.f,
         };
 
         return *this;

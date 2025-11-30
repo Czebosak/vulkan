@@ -49,7 +49,7 @@ void DescriptorAllocator::init_pool(VkDevice device, uint32_t max_sets, std::spa
         .pPoolSizes = pool_sizes.data(),
     };
 
-	vkCreateDescriptorPool(device, &pool_info, nullptr, &pool);
+	VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &pool));
 }
 
 void DescriptorAllocator::clear_descriptors(VkDevice device) {
