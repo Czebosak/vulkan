@@ -1,0 +1,8 @@
+{
+    "name": "skibidi",
+    "blocks": [
+        { "name": "air" },
+        { "name": "grass" },
+        { "name": "dirt" }
+    ]
+}

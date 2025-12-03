@@ -86,7 +86,17 @@ private:
 	VkPipelineLayout triangle_pipeline_layout;
 	VkPipeline triangle_pipeline;
 
+	VkPipelineLayout mesh_pipeline_layout;
+	VkPipeline mesh_pipeline;
+
+	GPUMeshBuffers rectangle;
+
 	GameState game_state;
+
+	AllocatedBuffer create_buffer(size_t alloc_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);
+	void destroy_buffer(const AllocatedBuffer& buffer);
+
+	GPUMeshBuffers upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
     uint32_t init_vulkan(GLFWwindow* window);
 	void init_swapchain();
@@ -97,6 +107,8 @@ private:
 	void init_pipelines();
 	void init_imgui();
 	void init_triangle_pipeline();
+	void init_mesh_pipeline();
+	void init_default_data();
 
     void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
