@@ -13,6 +13,7 @@
 #include <backends/vulkan/types.hpp>
 #include <backends/vulkan/descriptors.hpp>
 
+#include <input.hpp>
 #include <game_state.hpp>
 
 // constexpr uint32_t WIDTH = 640*2;
@@ -90,6 +91,8 @@ private:
 	VkPipeline mesh_pipeline;
 
 	GPUMeshBuffers rectangle;
+
+	input::Input input;
 
 	GameState game_state;
 

@@ -27,24 +27,46 @@
 #include <backends/vulkan/pipeline_builder.hpp>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+input::Input* input_ptr;
+
+void mouse_move_callback(GLFWwindow* window, double x_pos, double y_pos) {
+    input_ptr->register_move_event(glm::vec2(x_pos, y_pos));
+}
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    input::KeyState state;
+    switch (action) {
+        case GLFW_RELEASE:
+            state = input::KeyState::RELEASED;
+            break;
+        case GLFW_PRESS:
+            state = input::KeyState::PRESSED;
+            break;
+        default: return;
+    }
+    
+    input_ptr->register_event(static_cast<input::Key>(key), state);
+}
 
 AllocatedBuffer Engine::create_buffer(size_t alloc_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage) {
-	VkBufferCreateInfo buffer_info = {
+    VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext = nullptr,
         .size = alloc_size,
         .usage = usage,
     };
 
-	VmaAllocationCreateInfo vma_alloc_info = {
+    VmaAllocationCreateInfo vma_alloc_info = {
         .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
         .usage = memory_usage,
     };
 
-	AllocatedBuffer new_buffer;
-	VK_CHECK(vmaCreateBuffer(allocator, &buffer_info, &vma_alloc_info, &new_buffer.buffer, &new_buffer.allocation, &new_buffer.info));
+    AllocatedBuffer new_buffer;
+    VK_CHECK(vmaCreateBuffer(allocator, &buffer_info, &vma_alloc_info, &new_buffer.buffer, &new_buffer.allocation, &new_buffer.info));
 
-	return new_buffer;
+    return new_buffer;
 }
 
 void Engine::destroy_buffer(const AllocatedBuffer& buffer) {
@@ -52,46 +74,46 @@ void Engine::destroy_buffer(const AllocatedBuffer& buffer) {
 }
 
 GPUMeshBuffers Engine::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
-	const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
-	const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
+    const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
+    const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
 
-	GPUMeshBuffers new_surface;
+    GPUMeshBuffers new_surface;
 
-	new_surface.vertex_buffer = create_buffer(vertex_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    new_surface.vertex_buffer = create_buffer(vertex_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-	VkBufferDeviceAddressInfo device_adress_info{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = new_surface.vertex_buffer.buffer };
-	new_surface.vertex_buffer_address = vkGetBufferDeviceAddress(device, &device_adress_info);
+    VkBufferDeviceAddressInfo device_adress_info{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = new_surface.vertex_buffer.buffer };
+    new_surface.vertex_buffer_address = vkGetBufferDeviceAddress(device, &device_adress_info);
 
-	new_surface.index_buffer = create_buffer(index_buffer_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    new_surface.index_buffer = create_buffer(index_buffer_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     AllocatedBuffer staging = create_buffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
-	void* data = staging.info.pMappedData;
+    void* data = staging.info.pMappedData;
 
-	memcpy(data, vertices.data(), vertex_buffer_size);
-	memcpy((char*)data + vertex_buffer_size, indices.data(), index_buffer_size);
+    memcpy(data, vertices.data(), vertex_buffer_size);
+    memcpy((char*)data + vertex_buffer_size, indices.data(), index_buffer_size);
 
-	immediate_submit([&](VkCommandBuffer cmd) {
-		VkBufferCopy vertexCopy = {
+    immediate_submit([&](VkCommandBuffer cmd) {
+        VkBufferCopy vertexCopy = {
             .srcOffset = 0,
             .dstOffset = 0,
             .size = vertex_buffer_size,
         };
 
-		vkCmdCopyBuffer(cmd, staging.buffer, new_surface.vertex_buffer.buffer, 1, &vertexCopy);
+        vkCmdCopyBuffer(cmd, staging.buffer, new_surface.vertex_buffer.buffer, 1, &vertexCopy);
 
-		VkBufferCopy indexCopy = {
-		    .srcOffset = vertex_buffer_size,
-		    .dstOffset = 0,
-		    .size = index_buffer_size,
+        VkBufferCopy indexCopy = {
+            .srcOffset = vertex_buffer_size,
+            .dstOffset = 0,
+            .size = index_buffer_size,
         };
 
-		vkCmdCopyBuffer(cmd, staging.buffer, new_surface.index_buffer.buffer, 1, &indexCopy);
-	});
+        vkCmdCopyBuffer(cmd, staging.buffer, new_surface.index_buffer.buffer, 1, &indexCopy);
+    });
 
-	destroy_buffer(staging);
+    destroy_buffer(staging);
 
-	return new_surface;
+    return new_surface;
 }
 
 uint32_t Engine::init_vulkan(GLFWwindow *window) {
@@ -418,7 +440,7 @@ void Engine::init_pipelines() {
     init_background_pipelines();
 
     init_triangle_pipeline();
-	init_mesh_pipeline();
+    init_mesh_pipeline();
 }
 
 void Engine::init_imgui() {
@@ -491,29 +513,29 @@ void Engine::init_imgui() {
 
 void Engine::init_triangle_pipeline() {
     VkShaderModule triangle_frag_shader;
-	auto triangle_frag_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.frag.spv");
+    auto triangle_frag_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.frag.spv");
     if (triangle_frag_shader_opt) {
         triangle_frag_shader = *triangle_frag_shader_opt;
-		fmt::print("Triangle fragment shader succesfully loaded");
-	} else {
-		fmt::print("Error when building the triangle fragment shader module");
-	}
+        fmt::print("Triangle fragment shader succesfully loaded");
+    } else {
+        fmt::print("Error when building the triangle fragment shader module");
+    }
 
-	VkShaderModule triangle_vertex_shader;
-	auto triangle_vertex_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.vert.spv");
+    VkShaderModule triangle_vertex_shader;
+    auto triangle_vertex_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.vert.spv");
     if (triangle_vertex_shader_opt) {
         triangle_vertex_shader = *triangle_vertex_shader_opt;
-		fmt::print("Triangle vertex shader succesfully loaded");
-	}
-	else {
-		fmt::print("Error when building the triangle vertex shader module");
-	}
-	
-	//build the pipeline layout that controls the inputs/outputs of the shader
-	//we are not using descriptor sets or other systems yet, so no need to use anything other than empty default
+        fmt::print("Triangle vertex shader succesfully loaded");
+    }
+    else {
+        fmt::print("Error when building the triangle vertex shader module");
+    }
+    
+    //build the pipeline layout that controls the inputs/outputs of the shader
+    //we are not using descriptor sets or other systems yet, so no need to use anything other than empty default
     VkPipelineLayoutCreateInfo pipeline_layout_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
 
-	VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &triangle_pipeline_layout));
+    VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &triangle_pipeline_layout));
     
     triangle_pipeline = hayvk::builders::PipelineBuilder { .pipeline_layout = triangle_pipeline_layout }
         .set_shaders(triangle_vertex_shader, triangle_frag_shader)
@@ -525,50 +547,50 @@ void Engine::init_triangle_pipeline() {
         .disable_depthtest()
         .set_color_attachment_format(draw_image.image_format)
         .set_depth_format(VK_FORMAT_UNDEFINED)
-	    .build(device);
+        .build(device);
 
-	vkDestroyShaderModule(device, triangle_frag_shader, nullptr);
-	vkDestroyShaderModule(device, triangle_vertex_shader, nullptr);
+    vkDestroyShaderModule(device, triangle_frag_shader, nullptr);
+    vkDestroyShaderModule(device, triangle_vertex_shader, nullptr);
 
-	deletion_queue.push_function([&]() {
-		vkDestroyPipelineLayout(device, triangle_pipeline_layout, nullptr);
-		vkDestroyPipeline(device, triangle_pipeline, nullptr);
-	});
+    deletion_queue.push_function([&]() {
+        vkDestroyPipelineLayout(device, triangle_pipeline_layout, nullptr);
+        vkDestroyPipeline(device, triangle_pipeline, nullptr);
+    });
 }
 
 void Engine::init_mesh_pipeline() {
     VkShaderModule triangle_frag_shader;
-	auto triangle_frag_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.frag.spv");
+    auto triangle_frag_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.frag.spv");
     if (triangle_frag_shader_opt) {
         triangle_frag_shader = *triangle_frag_shader_opt;
-		fmt::print("Triangle fragment shader succesfully loaded");
-	} else {
-		fmt::print("Error when building the triangle fragment shader module");
-	}
+        fmt::print("Triangle fragment shader succesfully loaded");
+    } else {
+        fmt::print("Error when building the triangle fragment shader module");
+    }
 
-	VkShaderModule triangle_vertex_shader;
-	auto triangle_vertex_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle_mesh.vert.spv");
+    VkShaderModule triangle_vertex_shader;
+    auto triangle_vertex_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle_mesh.vert.spv");
     if (triangle_vertex_shader_opt) {
         triangle_vertex_shader = *triangle_vertex_shader_opt;
-		fmt::print("Triangle vertex shader succesfully loaded");
-	}
-	else {
-		fmt::print("Error when building the triangle vertex shader module");
-	}
-	
+        fmt::print("Triangle vertex shader succesfully loaded");
+    }
+    else {
+        fmt::print("Error when building the triangle vertex shader module");
+    }
+    
     VkPushConstantRange bufferRange = {
-	    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-	    .offset = 0,
-	    .size = sizeof(GPUDrawPushConstants),
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(GPUDrawPushConstants),
     };
 
-	VkPipelineLayoutCreateInfo pipeline_layout_info = {
+    VkPipelineLayoutCreateInfo pipeline_layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &bufferRange,
     };
 
-	VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &mesh_pipeline_layout));
+    VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &mesh_pipeline_layout));
     
     mesh_pipeline = hayvk::builders::PipelineBuilder { .pipeline_layout = mesh_pipeline_layout }
         .set_shaders(triangle_vertex_shader, triangle_frag_shader)
@@ -580,52 +602,78 @@ void Engine::init_mesh_pipeline() {
         .disable_depthtest()
         .set_color_attachment_format(draw_image.image_format)
         .set_depth_format(VK_FORMAT_UNDEFINED)
-	    .build(device);
+        .build(device);
 
-	vkDestroyShaderModule(device, triangle_frag_shader, nullptr);
-	vkDestroyShaderModule(device, triangle_vertex_shader, nullptr);
+    vkDestroyShaderModule(device, triangle_frag_shader, nullptr);
+    vkDestroyShaderModule(device, triangle_vertex_shader, nullptr);
 
-	deletion_queue.push_function([&]() {
-		vkDestroyPipelineLayout(device, mesh_pipeline_layout, nullptr);
-		vkDestroyPipeline(device, mesh_pipeline, nullptr);
-	});
+    deletion_queue.push_function([&]() {
+        vkDestroyPipelineLayout(device, mesh_pipeline_layout, nullptr);
+        vkDestroyPipeline(device, mesh_pipeline, nullptr);
+    });
 }
 
 void Engine::init_default_data() {
-	std::array<Vertex, 4> rect_vertices;
+    std::array<Vertex, 8> rect_vertices = {
+        Vertex { .position = glm::vec3(-0.5f, -0.5f, -0.5f) },
+        Vertex { .position = glm::vec3( 0.5f, -0.5f, -0.5f) },
+        Vertex { .position = glm::vec3( 0.5f,  0.5f, -0.5f) },
+        Vertex { .position = glm::vec3(-0.5f,  0.5f, -0.5f) },
+        Vertex { .position = glm::vec3(-0.5f, -0.5f,  0.5f) },
+        Vertex { .position = glm::vec3( 0.5f, -0.5f,  0.5f) },
+        Vertex { .position = glm::vec3( 0.5f,  0.5f,  0.5f) },
+        Vertex { .position = glm::vec3(-0.5f,  0.5f,  0.5f) },
+    };
 
-	rect_vertices[0].position = { 0.5,-0.5, 0.0};
-	rect_vertices[1].position = { 0.5, 0.5, 0.0};
-	rect_vertices[2].position = {-0.5,-0.5, 0.0};
-	rect_vertices[3].position = {-0.5, 0.5, 0.0};
+    std::array<uint32_t, 36> rect_indices = {
+        // Front face (z = +0.5)
+        4, 5, 6,
+        4, 6, 7,
 
-	rect_vertices[0].color = { 0,0, 0,1 };
-	rect_vertices[1].color = { 0.5, 0.5, 0.5, 1.0 };
-	rect_vertices[2].color = { 1,0, 0,1 };
-	rect_vertices[3].color = { 0,1, 0,1 };
+        // Back face (z = -0.5)
+        0, 2, 1,
+        0, 3, 2,
 
-	std::array<uint32_t, 6> rect_indices;
+        // Left face (x = -0.5)
+        0, 7, 3,
+        0, 4, 7,
 
-	rect_indices[0] = 0;
-	rect_indices[1] = 1;
-	rect_indices[2] = 2;
+        // Right face (x = +0.5)
+        1, 2, 6,
+        1, 6, 5,
 
-	rect_indices[3] = 2;
-	rect_indices[4] = 1;
-	rect_indices[5] = 3;
+        // Top face (y = +0.5)
+        3, 7, 6,
+        3, 6, 2,
 
-	rectangle = upload_mesh(rect_indices,rect_vertices);
+        // Bottom face (y = -0.5)
+        0, 1, 5,
+        0, 5, 4,
+    };
 
-	deletion_queue.push_function([&](){
-		destroy_buffer(rectangle.index_buffer);
-		destroy_buffer(rectangle.vertex_buffer);
-	});
+    rectangle = upload_mesh(rect_indices, rect_vertices);
+
+    deletion_queue.push_function([&](){
+        destroy_buffer(rectangle.index_buffer);
+        destroy_buffer(rectangle.vertex_buffer);
+    });
+
+    game_state.camera = Camera(
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::angleAxis(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        //glm::perspective(glm::radians(70.0f), 640.0f / 480.0f, 0.1f, 10000.0f)
+        glm::perspective(glm::radians(70.0f), (float)swapchain_extent.width / (float)swapchain_extent.height, 0.1f, 10000.0f)
+    );
 }
 
+//
+
 uint32_t Engine::init() {
+    input_ptr = &input;
+
     static constexpr uint32_t INIT_ERR_GLFW_INIT = -1;
     static constexpr uint32_t INIT_ERR_WINDOW = -2;
-    static constexpr uint32_t INIT_ERR_SURFACE = -3;
+    static constexpr uint32_t INIT_ERR_SURFACE = -3; 
     static constexpr uint32_t INIT_ERR_VK_INSTANCE = -4;
     static constexpr uint32_t INIT_ERR_VK_STRUCT = -5;
 
@@ -639,6 +687,11 @@ uint32_t Engine::init() {
 
     if (!window) return INIT_ERR_WINDOW;
 
+    glfwSetCursorPosCallback(window, mouse_move_callback);
+    glfwSetKeyCallback(window, key_callback);
+    
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
     init_vulkan(window);
     init_swapchain();
     init_commands();
@@ -646,7 +699,7 @@ uint32_t Engine::init() {
     init_descriptors();
     init_pipelines();
     init_imgui();
-	init_default_data();
+    init_default_data();
 
     push_constants = {
         .data1 = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
@@ -663,13 +716,17 @@ void Engine::run() {
     while (!should_close) {
         should_close = glfwWindowShouldClose(window);
         if (should_close) break;
+
+        input.update();
+
+        game_state.main_loop(input);
         
         // do not draw if we are minimized
-        if (minimized) {
+        /* if (minimized) {
             // throttle the speed
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
-        }
+        } */
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -680,6 +737,9 @@ void Engine::run() {
             ImGui::InputFloat4("data2", (float*)&push_constants.data2);
             ImGui::InputFloat4("data3", (float*)&push_constants.data3);
             ImGui::InputFloat4("data4", (float*)&push_constants.data4);
+
+            ImGui::Text("%f, %f", glm::degrees(game_state.yaw), glm::degrees(game_state.pitch));
+            ImGui::Text("%f, %f, %f", game_state.camera.position.x, game_state.camera.position.y, game_state.camera.position.z);
         ImGui::End();
 
         ImGui::Render();
@@ -729,15 +789,15 @@ void Engine::draw_background(VkCommandBuffer cmd) {
 }
 
 void Engine::draw_geometry(VkCommandBuffer cmd) {
-	//begin a render pass  connected to our draw image
-	VkRenderingAttachmentInfo color_attachment = vkinit::attachment_info(draw_image.image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    //begin a render pass  connected to our draw image
+    VkRenderingAttachmentInfo color_attachment = vkinit::attachment_info(draw_image.image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	VkRenderingInfo render_info = vkinit::rendering_info(draw_extent, &color_attachment, nullptr);
-	vkCmdBeginRendering(cmd, &render_info);
+    VkRenderingInfo render_info = vkinit::rendering_info(draw_extent, &color_attachment, nullptr);
+    vkCmdBeginRendering(cmd, &render_info);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, triangle_pipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, triangle_pipeline);
 
-	VkViewport viewport = {
+    VkViewport viewport = {
         .x = 0,
         .y = 0,
         .width = (float)draw_extent.width,
@@ -746,29 +806,34 @@ void Engine::draw_geometry(VkCommandBuffer cmd) {
         .maxDepth = 1.f,
     };
 
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-	VkRect2D scissor = {
-	    .offset = {0, 0},
-	    .extent = draw_extent,
+    VkRect2D scissor = {
+        .offset = {0, 0},
+        .extent = draw_extent,
     };
 
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	//vkCmdDraw(cmd, 3, 1, 0, 0);
+    //vkCmdDraw(cmd, 3, 1, 0, 0);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline);
 
-	GPUDrawPushConstants push_constants;
-	push_constants.world_matrix = glm::mat4{ 1.0f };
-	push_constants.vertex_buffer = rectangle.vertex_buffer_address;
+    glm::mat4 vp = game_state.camera.get_matrix();
+    glm::mat4 model = glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(5.0f)), glm::vec3(0.0f, 0.0f, -1.0f));
 
-	vkCmdPushConstants(cmd, mesh_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
-	vkCmdBindIndexBuffer(cmd, rectangle.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    GPUDrawPushConstants push_constants;
 
-	vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+    glm::mat4 mat = vp * model;
+    push_constants.world_matrix = mat;
+    push_constants.vertex_buffer = rectangle.vertex_buffer_address;
 
-	vkCmdEndRendering(cmd);
+    vkCmdPushConstants(cmd, mesh_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+    vkCmdBindIndexBuffer(cmd, rectangle.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+    vkCmdDrawIndexed(cmd, 36, 1, 0, 0, 0);
+
+    vkCmdEndRendering(cmd);
 }
 
 void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -828,7 +893,7 @@ void Engine::draw() {
 
     draw_background(cmd);
 
-	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     draw_geometry(cmd);
 

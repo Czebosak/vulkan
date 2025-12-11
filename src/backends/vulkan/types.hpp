@@ -69,11 +69,12 @@ struct AllocatedBuffer {
 };
 
 struct Vertex {
-	glm::vec3 position;
-	float uv_x;
-	glm::vec3 normal;
-	float uv_y;
-	glm::vec4 color;
+    glm::vec3 position;
+    float _pad0;
+    glm::vec3 normal;
+    float _pad1;
+    glm::vec2 uv;
+    glm::vec2 _pad2;
 };
 
 // holds the resources needed for a mesh
