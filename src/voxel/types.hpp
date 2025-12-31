@@ -3,19 +3,31 @@
 #include <cstdint>
 #include <cstddef>
 #include <array>
+#include <variant>
 
-using BlockID = uint32_t;
+#include <backends/vulkan/allocated_buffer.hpp>
 
-struct Block {
-    BlockID id;
-};
+namespace voxel {
+    using BlockID = uint32_t;
 
-constexpr size_t CHUNK_SIZE = 16;
+    struct Block {
+        BlockID id;
+    };
 
-class Chunk {
-private:
-    std::array<std::array<std::array<Block, CHUNK_SIZE>, CHUNK_SIZE>, CHUNK_SIZE> data;
-    bool dirty;
-public:
-    void generate_mesh();
-};
+    constexpr size_t CHUNK_SIZE = 16;
+
+    struct Dirty {};
+
+    struct Mesh {
+        GPUMeshBuffers buffers;
+    };
+
+    using MeshState = std::variant<Mesh, Dirty>;
+
+    struct Chunk {
+        std::array<std::array<std::array<Block, CHUNK_SIZE>, CHUNK_SIZE>, CHUNK_SIZE> data;
+        MeshState mesh_state;
+
+        bool is_dirty();
+    };
+}

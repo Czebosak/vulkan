@@ -1,5 +1,7 @@
 #include "pipeline_builder.hpp"
 
+#include <fmt/core.h>
+
 #include <backends/vulkan/types.hpp>
 
 namespace hayvk::builders {

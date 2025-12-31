@@ -50,7 +50,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     input_ptr->register_event(static_cast<input::Key>(key), state);
 }
 
-AllocatedBuffer Engine::create_buffer(size_t alloc_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage) {
+/* AllocatedBuffer Engine::create_buffer(size_t alloc_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage) {
     VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext = nullptr,
@@ -71,22 +71,22 @@ AllocatedBuffer Engine::create_buffer(size_t alloc_size, VkBufferUsageFlags usag
 
 void Engine::destroy_buffer(const AllocatedBuffer& buffer) {
     vmaDestroyBuffer(allocator, buffer.buffer, buffer.allocation);
-}
+} */
 
-GPUMeshBuffers Engine::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
+/* GPUMeshBuffers Engine::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
     const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
     const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
 
     GPUMeshBuffers new_surface;
 
-    new_surface.vertex_buffer = create_buffer(vertex_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    new_surface.vertex_buffer = AllocatedBuffer::create(vertex_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     VkBufferDeviceAddressInfo device_adress_info{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = new_surface.vertex_buffer.buffer };
     new_surface.vertex_buffer_address = vkGetBufferDeviceAddress(device, &device_adress_info);
 
-    new_surface.index_buffer = create_buffer(index_buffer_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    new_surface.index_buffer = AllocatedBuffer::create(allocator, index_buffer_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-    AllocatedBuffer staging = create_buffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    AllocatedBuffer staging = AllocatedBuffer::create(allocator, vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
     void* data = staging.info.pMappedData;
 
@@ -111,10 +111,10 @@ GPUMeshBuffers Engine::upload_mesh(std::span<uint32_t> indices, std::span<Vertex
         vkCmdCopyBuffer(cmd, staging.buffer, new_surface.index_buffer.buffer, 1, &indexCopy);
     });
 
-    destroy_buffer(staging);
+    staging.destroy(allocator);
 
     return new_surface;
-}
+} */
 
 uint32_t Engine::init_vulkan(GLFWwindow *window) {
     vkb::InstanceBuilder builder;
@@ -651,11 +651,14 @@ void Engine::init_default_data() {
         0, 5, 4,
     };
 
-    rectangle = upload_mesh(rect_indices, rect_vertices);
+    std::span<Vertex> vspan(rect_vertices);
+    std::span<uint32_t> ispan(rect_indices);
+
+    rectangle = upload_mesh(render_state, vspan, ispan);
 
     deletion_queue.push_function([&](){
-        destroy_buffer(rectangle.index_buffer);
-        destroy_buffer(rectangle.vertex_buffer);
+        rectangle.index_buffer.destroy(allocator);
+        rectangle.vertex_buffer.destroy(allocator);
     });
 
     game_state.camera = Camera(
@@ -697,6 +700,9 @@ uint32_t Engine::init() {
     init_commands();
     init_sync_structures();
     init_descriptors();
+
+    render_state = RenderState(this, device, allocator);
+
     init_pipelines();
     init_imgui();
     init_default_data();

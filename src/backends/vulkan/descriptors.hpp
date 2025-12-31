@@ -5,6 +5,7 @@
 #include <vector>
 #include <span>
 
+#include <backends/vulkan/defines.hpp>
 #include <backends/vulkan/types.hpp>
 
 struct DescriptorLayoutBuilder {

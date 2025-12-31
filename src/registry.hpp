@@ -9,7 +9,7 @@
 
 namespace registry {
     struct BlockDefinition {
-        BlockID id;
+        voxel::BlockID id;
         std::string name;
     };
 
@@ -53,7 +53,7 @@ namespace registry {
         static Registry* singleton;
 
         std::unordered_map<std::string, Namespace, transparent_string_hash, std::equal_to<>> namespaces;
-        std::unordered_map<BlockID, BlockDefinition*> shorthand_id_to_block;
+        std::unordered_map<voxel::BlockID, BlockDefinition*> shorthand_id_to_block;
 
         bool locked;
 

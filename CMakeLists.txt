@@ -18,6 +18,12 @@ file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/
 
 add_executable(VoxelGame "${MY_SOURCES}")
 
+#if(MSVC)
+#  target_compile_options(VoxelGame PRIVATE /W4 /WX)
+#else()
+#  target_compile_options(VoxelGame PRIVATE -Wall -Wextra -Wpedantic -Werror)
+#endif()
+
 # Typically you don't care so much for a third party library's tests to be
 # run from your own project's code.
 # set(JSON_NOEXCEPTION ON)
