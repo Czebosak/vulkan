@@ -17,13 +17,17 @@ GameState::GameState() {
     registry.register_json_file("/home/czebosak/Development/cpp/graphics/vulkan/example.json");
 
     registry.lock();
+    
+    world_generator = WorldGenerator();
 
-    chunk.mesh_state = voxel::Dirty {};
-    chunk.data[0][0].fill(voxel::Block { registry.get_block("skibidi:air")->id });
-    chunk.data[0].fill(chunk.data[0][0]);
-    chunk.data.fill(chunk.data[0]);
+    chunk = world_generator.generate_chunk(glm::ivec3(0, 0, 0), registry);
 
-    chunk.data[0][10][5].id = registry.get_block("skibidi:dirt")->id;
+    //chunk.mesh_state = voxel::Dirty {};
+    //chunk.data[0][0].fill(voxel::Block { registry.get_block("skibidi:air")->id });
+    //chunk.data[0].fill(chunk.data[0][0]);
+    //chunk.data.fill(chunk.data[0]);
+
+    //chunk.data[0][10][5].id = registry.get_block("skibidi:dirt")->id;
 }
 
 GameState::~GameState() {

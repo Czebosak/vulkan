@@ -39,8 +39,14 @@ set(JSON_Install OFF CACHE INTERNAL "")
 # include(...) for pulling in other CMake projects anyways.
 add_subdirectory("external/nlohmann_json")
 
+set(FASTNOISE2_NOISETOOL OFF CACHE BOOL "Build Noise Tool" FORCE) #example if don't need the graph tool
+set(FASTNOISE2_TESTS     OFF CACHE BOOL "idk" FORCE)
+set(FASTNOISE2_UTILITY   OFF CACHE BOOL "idk" FORCE)
+
+add_subdirectory(external/fastnoise2)
+
 target_include_directories(VoxelGame PRIVATE "src")
-target_include_directories(VoxelGame PRIVATE "external/fastnoiselite")
+target_include_directories(VoxelGame PRIVATE "external/fastnoise2/include")
 target_include_directories(VoxelGame PRIVATE "external/vma/include")
 target_include_directories(VoxelGame PRIVATE "external/vkbootstrap")
 target_include_directories(VoxelGame PRIVATE "external/imgui")
@@ -52,7 +58,10 @@ target_include_directories(VoxelGame PRIVATE "external/ctre")
     #add_definitions(-DFEATURE_X_ENABLED)
     #target_sources(myTarget PRIVATE feature_x.cpp)
 #else()
-target_link_libraries(VoxelGame PRIVATE glfw Vulkan::Vulkan fmt::fmt nlohmann_json::nlohmann_json)
+target_link_libraries(VoxelGame PRIVATE glfw Vulkan::Vulkan fmt::fmt nlohmann_json::nlohmann_json FastNoise)
+
+target_compile_options(VoxelGame PRIVATE -Wnrvo)
+
 #endif()
 
 if(PRODUCTION_BUILD)
