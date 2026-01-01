@@ -441,6 +441,7 @@ void Engine::init_pipelines() {
 
     init_triangle_pipeline();
     init_mesh_pipeline();
+    init_voxel_pipeline();
 }
 
 void Engine::init_imgui() {
@@ -613,6 +614,61 @@ void Engine::init_mesh_pipeline() {
     });
 }
 
+void Engine::init_voxel_pipeline() {
+    VkShaderModule voxel_frag_shader;
+    auto voxel_frag_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/voxel.frag.spv");
+    if (voxel_frag_shader_opt) {
+        voxel_frag_shader = *voxel_frag_shader_opt;
+        fmt::print("Voxel fragment shader succesfully loaded");
+    } else {
+        fmt::print("Error when building the voxel fragment shader module");
+    }
+
+    VkShaderModule voxel_vertex_shader;
+    auto voxel_vertex_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/voxel.vert.spv");
+    if (voxel_vertex_shader_opt) {
+        voxel_vertex_shader = *voxel_vertex_shader_opt;
+        fmt::print("Voxel vertex shader succesfully loaded");
+    }
+    else {
+        fmt::print("Error when building the voxel vertex shader module");
+    }
+    
+    VkPushConstantRange bufferRange = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(GPUDrawPushConstants),
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &bufferRange,
+    };
+
+    VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &voxel_pipeline_layout));
+    
+    voxel_pipeline = hayvk::builders::PipelineBuilder { .pipeline_layout = voxel_pipeline_layout }
+        .set_shaders(voxel_vertex_shader, voxel_frag_shader)
+        .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .set_polygon_mode(VK_POLYGON_MODE_FILL)
+        .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .set_multisampling_none()
+        .disable_blending()
+        .disable_depthtest()
+        .set_color_attachment_format(draw_image.image_format)
+        .set_depth_format(VK_FORMAT_UNDEFINED)
+        .build(device);
+
+    vkDestroyShaderModule(device, voxel_frag_shader, nullptr);
+    vkDestroyShaderModule(device, voxel_vertex_shader, nullptr);
+
+    deletion_queue.push_function([&]() {
+        vkDestroyPipelineLayout(device, voxel_pipeline_layout, nullptr);
+        vkDestroyPipeline(device, voxel_pipeline, nullptr);
+    });
+}
+
 void Engine::init_default_data() {
     std::array<Vertex, 8> rect_vertices = {
         Vertex { .position = glm::vec3(-0.5f, -0.5f, -0.5f) },
@@ -667,6 +723,10 @@ void Engine::init_default_data() {
         //glm::perspective(glm::radians(70.0f), 640.0f / 480.0f, 0.1f, 10000.0f)
         glm::perspective(glm::radians(70.0f), (float)swapchain_extent.width / (float)swapchain_extent.height, 0.1f, 10000.0f)
     );
+
+    if (game_state.chunk.is_dirty()) {
+        game_state.chunk.mesh_state = generate_mesh(render_state, game_state.chunk, registry::Registry::get());
+    }
 }
 
 //
@@ -842,6 +902,54 @@ void Engine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdEndRendering(cmd);
 }
 
+void Engine::draw_chunk(VkCommandBuffer cmd, const voxel::Chunk& chunk) {
+    //begin a render pass  connected to our draw image
+    VkRenderingAttachmentInfo color_attachment = vkinit::attachment_info(draw_image.image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    VkRenderingInfo render_info = vkinit::rendering_info(draw_extent, &color_attachment, nullptr);
+    vkCmdBeginRendering(cmd, &render_info);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline);
+
+    VkViewport viewport = {
+        .x = 0,
+        .y = 0,
+        .width = (float)draw_extent.width,
+        .height = (float)draw_extent.height,
+        .minDepth = 0.f,
+        .maxDepth = 1.f,
+    };
+
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor = {
+        .offset = {0, 0},
+        .extent = draw_extent,
+    };
+
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline);
+
+    glm::mat4 vp = game_state.camera.get_matrix();
+    //glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+
+    GPUDrawPushConstants push_constants;
+
+    const voxel::Mesh& mesh = std::get<voxel::Mesh>(chunk.mesh_state);
+
+    glm::mat4 mat = vp;
+    push_constants.world_matrix = mat;
+    push_constants.vertex_buffer = mesh.buffers.vertex_buffer_address;
+
+    vkCmdPushConstants(cmd, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+    vkCmdBindIndexBuffer(cmd, mesh.buffers.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+
+    vkCmdDrawIndexed(cmd, mesh.index_count, 1, 0, 0, 0);
+
+    vkCmdEndRendering(cmd);
+}
+
 void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
     VK_CHECK(vkResetFences(device, 1, &imm_fence));
     VK_CHECK(vkResetCommandBuffer(imm_command_buffer, 0));
@@ -901,7 +1009,8 @@ void Engine::draw() {
 
     vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    draw_geometry(cmd);
+    //draw_geometry(cmd);
+    draw_chunk(cmd, game_state.chunk);
 
     //transition the draw image and the swapchain image into their correct transfer layouts
     vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);

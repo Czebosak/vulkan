@@ -1,4 +1,7 @@
 #pragma once
+
 #include <voxel/types.hpp>
 
-voxel::Mesh generate_mesh(VmaAllocator allocator);
+#include <registry.hpp>
+
+voxel::Mesh generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry);

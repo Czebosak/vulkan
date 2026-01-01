@@ -14,6 +14,8 @@
 #include <backends/vulkan/descriptors.hpp>
 #include <backends/vulkan/allocated_buffer.hpp>
 
+#include <voxel/mesh_generation.hpp>
+
 #include <input.hpp>
 #include <game_state.hpp>
 
@@ -93,7 +95,12 @@ private:
     VkPipelineLayout mesh_pipeline_layout;
     VkPipeline mesh_pipeline;
 
+    VkPipelineLayout voxel_pipeline_layout;
+    VkPipeline voxel_pipeline;
+
     GPUMeshBuffers rectangle;
+
+    voxel::Mesh chunk_mesh;
 
     input::Input input;
 
@@ -116,6 +123,7 @@ private:
     void init_imgui();
     void init_triangle_pipeline();
     void init_mesh_pipeline();
+    void init_voxel_pipeline();
     void init_default_data();
 
     void create_swapchain(uint32_t width, uint32_t height);
@@ -124,6 +132,7 @@ private:
     void draw_imgui(VkCommandBuffer cmd, VkImageView target_image_view);
     void draw_background(VkCommandBuffer cmd);
     void draw_geometry(VkCommandBuffer cmd);
+    void draw_chunk(VkCommandBuffer cmd, const voxel::Chunk& chunk);
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 public:

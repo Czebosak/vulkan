@@ -20,6 +20,7 @@ namespace voxel {
 
     struct Mesh {
         GPUMeshBuffers buffers;
+        uint32_t index_count;
     };
 
     using MeshState = std::variant<Mesh, Dirty>;

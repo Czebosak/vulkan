@@ -4,5 +4,6 @@
 namespace voxel {
     struct Vertex {
         glm::vec3 position;
+        float _pad;
     };
 }

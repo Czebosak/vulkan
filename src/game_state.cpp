@@ -18,14 +18,12 @@ GameState::GameState() {
 
     registry.lock();
 
-    const registry::BlockDefinition* def = registry.get_block("skibidi:air");
-    fmt::println("{}, {}", def->id, def->name);
+    chunk.mesh_state = voxel::Dirty {};
+    chunk.data[0][0].fill(voxel::Block { registry.get_block("skibidi:air")->id });
+    chunk.data[0].fill(chunk.data[0][0]);
+    chunk.data.fill(chunk.data[0]);
 
-    def = registry.get_block("skibidi:grass");
-    fmt::println("{}, {}", def->id, def->name);
-
-    def = registry.get_block("skibidi:dirt");
-    fmt::println("{}, {}", def->id, def->name);
+    chunk.data[0][10][5].id = registry.get_block("skibidi:dirt")->id;
 }
 
 GameState::~GameState() {
