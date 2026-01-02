@@ -252,10 +252,27 @@ void Engine::init_swapchain() {
 
     VK_CHECK(vkCreateImageView(device, &rview_info, nullptr, &draw_image.image_view));
 
-    //add to deletion queues
+    depth_image.image_format = VK_FORMAT_D32_SFLOAT;
+	depth_image.image_extent = draw_image_extent;
+
+    VkImageUsageFlags depth_image_usages = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+	VkImageCreateInfo dimg_info = vkinit::image_create_info(depth_image.image_format, depth_image_usages, draw_image_extent);
+
+	//allocate and create the image
+	vmaCreateImage(allocator, &dimg_info, &rimg_allocinfo, &depth_image.image, &depth_image.allocation, nullptr);
+
+	//build a image-view for the draw image to use for rendering
+	VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(depth_image.image_format, depth_image.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	VK_CHECK(vkCreateImageView(device, &dview_info, nullptr, &depth_image.image_view));
+
     deletion_queue.push_function([&]() {
         vkDestroyImageView(device, draw_image.image_view, nullptr);
         vmaDestroyImage(allocator, draw_image.image, draw_image.allocation);
+
+        vkDestroyImageView(device, depth_image.image_view, nullptr);
+        vmaDestroyImage(allocator, depth_image.image, depth_image.allocation);
     });
 }
 
@@ -654,12 +671,12 @@ void Engine::init_voxel_pipeline() {
         .set_shaders(voxel_vertex_shader, voxel_frag_shader)
         .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP)
         .set_polygon_mode(VK_POLYGON_MODE_FILL)
-        .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .set_cull_mode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .set_multisampling_none()
         .disable_blending()
-        .disable_depthtest()
+	    .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
         .set_color_attachment_format(draw_image.image_format)
-        .set_depth_format(VK_FORMAT_UNDEFINED)
+        .set_depth_format(depth_image.image_format)
         .build(device);
 
     vkDestroyShaderModule(device, voxel_frag_shader, nullptr);
@@ -907,8 +924,9 @@ void Engine::draw_geometry(VkCommandBuffer cmd) {
 void Engine::draw_chunk(VkCommandBuffer cmd, const voxel::Chunk& chunk) {
     //begin a render pass  connected to our draw image
     VkRenderingAttachmentInfo color_attachment = vkinit::attachment_info(draw_image.image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo depth_attachment = vkinit::depth_attachment_info(depth_image.image_view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-    VkRenderingInfo render_info = vkinit::rendering_info(draw_extent, &color_attachment, nullptr);
+    VkRenderingInfo render_info = vkinit::rendering_info(draw_extent, &color_attachment, &depth_attachment);
     vkCmdBeginRendering(cmd, &render_info);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline);
@@ -1008,6 +1026,7 @@ void Engine::draw() {
     draw_background(cmd);
 
     vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vkutil::transition_image(cmd, depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     //draw_geometry(cmd);
     draw_chunk(cmd, game_state.chunk);

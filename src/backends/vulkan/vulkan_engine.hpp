@@ -62,6 +62,7 @@ private:
     VmaAllocator allocator;
 
     AllocatedImage draw_image;
+    AllocatedImage depth_image;
     VkExtent2D draw_extent;
 
     DescriptorAllocator global_descriptor_allocator;

@@ -30,6 +30,7 @@ namespace hayvk::builders {
         PipelineBuilder& disable_blending();
         PipelineBuilder& set_color_attachment_format(VkFormat format);
         PipelineBuilder& set_depth_format(VkFormat format);
+        PipelineBuilder& enable_depthtest(bool depth_write_enable, VkCompareOp op);
         PipelineBuilder& disable_depthtest();
     };
 }

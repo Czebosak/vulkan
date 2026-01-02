@@ -139,8 +139,24 @@ namespace hayvk::builders {
         return *this;
     }
 
+    PipelineBuilder& PipelineBuilder::enable_depthtest(bool depth_write_enable, VkCompareOp op) {
+        depth_stencil = VkPipelineDepthStencilStateCreateInfo {
+            .depthTestEnable = VK_TRUE,
+            .depthWriteEnable = depth_write_enable,
+            .depthCompareOp = op,
+            .depthBoundsTestEnable = VK_FALSE,
+            .stencilTestEnable = VK_FALSE,
+            .front = {},
+            .back = {},
+            .minDepthBounds = 0.f,
+            .maxDepthBounds = 1.f,
+        };
+
+        return *this;
+    }
+
     PipelineBuilder& PipelineBuilder::disable_depthtest() {
-        VkPipelineDepthStencilStateCreateInfo {
+        depth_stencil = VkPipelineDepthStencilStateCreateInfo {
             .depthTestEnable = VK_FALSE,
             .depthWriteEnable = VK_FALSE,
             .depthCompareOp = VK_COMPARE_OP_NEVER,
