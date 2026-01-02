@@ -798,13 +798,20 @@ void Engine::run() {
     bool should_close = false;
     bool minimized = false;
 
+    double delta_time = 0.0f;
+    double last_frame = 0.0f;
+
     while (!should_close) {
         should_close = glfwWindowShouldClose(window);
         if (should_close) break;
 
+        double current_frame = glfwGetTime();
+        delta_time = current_frame - last_frame;
+        last_frame = current_frame;
+
         input.update();
 
-        game_state.main_loop(input);
+        game_state.main_loop(input, static_cast<float>(delta_time));
         
         // do not draw if we are minimized
         /* if (minimized) {

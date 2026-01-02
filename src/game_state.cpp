@@ -34,7 +34,7 @@ GameState::~GameState() {
     Registry::destroy();
 }
 
-void GameState::main_loop(Input& input) {
+void GameState::main_loop(const Input& input, float delta) {
     glm::vec2 mouse_delta = input.get_mouse_delta();
     if (mouse_delta.x != 0.0f || mouse_delta.y != 0.0f) {
         yaw -= mouse_delta.x * 0.001f;
@@ -67,6 +67,8 @@ void GameState::main_loop(Input& input) {
     glm::vec3 forward = camera.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 right   = camera.rotation * glm::vec3(1.0f, 0.0f,  0.0f);
 
+    constexpr float speed = 80.0f;
+
     glm::vec3 movement = (dir.x * forward + dir.z * right); //* 20.0f;
-    camera.position += movement;
+    camera.position += movement * speed * delta;
 }

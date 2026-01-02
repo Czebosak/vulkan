@@ -20,5 +20,5 @@ public:
     GameState();
     ~GameState();
 
-    void main_loop(input::Input& input);
+    void main_loop(const input::Input& input, float delta);
 };
