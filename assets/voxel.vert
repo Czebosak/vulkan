@@ -1,26 +1,125 @@
 #version 450
 #extension GL_EXT_buffer_reference : require
 
-layout (location = 0) out vec3 outColor;
-//layout (location = 1) out vec2 outUV;
-
-struct Vertex {
-    vec3 position;
-    //vec3 normal;
-    //vec2 uv;
+struct Face {
+    vec3 vertices[4];
+    vec3 normal;
 };
 
-layout(buffer_reference, std430) readonly buffer VertexBuffer {
-    Vertex vertices[];
+const Face FACES[6] = Face[6](
+    // +Y face (top) — normal (0,1,0)
+    Face(
+        vec3[4](
+            vec3(0,1,0), // low Z, left
+            vec3(1,1,0), // low Z, right
+            vec3(0,1,1), // high Z, left
+            vec3(1,1,1)  // high Z, right
+        ),
+        vec3(0,1,0)
+    ),
+
+    // -Y face (bottom) — normal (0,-1,0)
+    Face(
+        vec3[4](
+            vec3(0,0,0), // low Z, left
+            vec3(1,0,0), // low Z, right
+            vec3(0,0,1), // high Z, left
+            vec3(1,0,1)  // high Z, right
+        ),
+        vec3(0,-1,0)
+    ),
+
+    // -X face (left) — normal (-1,0,0)
+    Face(
+        vec3[4](
+            vec3(0,0,0), // low Y, low Z
+            vec3(0,0,1), // low Y, high Z
+            vec3(0,1,0), // high Y, low Z
+            vec3(0,1,1)  // high Y, high Z
+        ),
+        vec3(-1,0,0)
+    ),
+
+    // +X face (right) — normal (1,0,0)
+    Face(
+        vec3[4](
+            vec3(1,0,0), // low Y, low Z
+            vec3(1,0,1), // low Y, high Z
+            vec3(1,1,0), // high Y, low Z
+            vec3(1,1,1)  // high Y, high Z
+        ),
+        vec3(1,0,0)
+    ),
+
+    // +Z face (front) — normal (0,0,1)
+    Face(
+        vec3[4](
+            vec3(0,0,1), // low Y, left
+            vec3(1,0,1), // low Y, right
+            vec3(0,1,1), // high Y, left
+            vec3(1,1,1)  // high Y, right
+        ),
+        vec3(0,0,1)
+    ),
+
+    // -Z face (back) — normal (0,0,-1)
+    Face(
+        vec3[4](
+            vec3(0,0,0), // low Y, left
+            vec3(1,0,0), // low Y, right
+            vec3(0,1,0), // high Y, left
+            vec3(1,1,0)  // high Y, right
+        ),
+        vec3(0,0,-1)
+    )
+);
+
+const vec2 UV[4] = {
+    vec2(0,0), // v0
+    vec2(1,0), // v1
+    vec2(0,1), // v2
+    vec2(1,1)  // v3
+};
+
+struct UnpackedFaceData {
+    uint face;
+    vec3 pos;
+};
+
+layout (location = 0) out vec2 outUV;
+layout (location = 1) out vec3 outNormal;
+
+layout(buffer_reference, std430) readonly buffer FaceBuffer {
+    uint faces[];
 };
 
 layout(push_constant) uniform constants {
-    mat4 render_matrix;
-    VertexBuffer vertex_buffer;
+    mat4 mvp;
+    FaceBuffer face_buffer;
 } PushConstants;
 
-void main() {
-    Vertex v = PushConstants.vertex_buffer.vertices[gl_VertexIndex];
+UnpackedFaceData unpack_face_data(uint packed) {
+    return UnpackedFaceData(
+        packed >> 15, // face
+        vec3( // Position
+            packed & 0x1Fu,
+            (packed >> 5) & 0x1Fu,
+            (packed >> 10) & 0x1Fu
+        )
+    );
+}
 
-    gl_Position = PushConstants.render_matrix * vec4(v.position, 1.0f);
+const uint VERTEX_COUNT = 4;
+
+void main() {
+    uint packed_face = PushConstants.face_buffer.faces[gl_InstanceIndex];
+
+    UnpackedFaceData unpacked_face = unpack_face_data(packed_face);
+
+    Face face = FACES[unpacked_face.face];
+
+    outNormal = face.normal;
+    outUV = UV[gl_VertexIndex];
+
+    gl_Position = PushConstants.mvp * vec4(face.vertices[gl_VertexIndex] + unpacked_face.pos, 1.0f);
 }

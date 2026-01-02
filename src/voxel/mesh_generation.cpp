@@ -6,65 +6,70 @@
 
 #include <voxel/render_types.hpp>
 
+#include <magic_enum/magic_enum.hpp>
+#include <magic_enum/magic_enum_utility.hpp>
+
 using namespace voxel;
 
+consteval uint8_t face_to_bit(Face f) {
+    return 1 << magic_enum::enum_index(f).value();
+}
+
+/* uint8_t generate_visible_faces(std::vector<PackedFace>& packed_faces, size_t x, size_t y, size_t z, const voxel::Chunk& chunk, BlockID air_id) {
+    uint8_t faces = 0;
+
+    if (z == 0              || chunk.data[x][y][z - 1].id == air_id) faces |= face_to_bit(Face::Forward);
+    if (z == CHUNK_SIZE - 1 || chunk.data[x][y][z + 1].id == air_id) faces |= face_to_bit(Face::Backward);
+    if (x == 0              || chunk.data[x - 1][y][z].id == air_id) faces |= face_to_bit(Face::Left);
+    if (x == CHUNK_SIZE - 1 || chunk.data[x + 1][y][z].id == air_id) faces |= face_to_bit(Face::Right);
+    if (y == 0              || chunk.data[x][y - 1][z].id == air_id) faces |= face_to_bit(Face::Down);
+    if (y == CHUNK_SIZE - 1 || chunk.data[x][y + 1][z].id == air_id) faces |= face_to_bit(Face::Up);
+
+    return faces;
+} */
+
+uint32_t pack_face(size_t x, size_t y, size_t z, Face face) {
+    static_assert(magic_enum::enum_integer(magic_enum::enum_values<Face>().back()) <= (1 << 3));
+
+    uint32_t packed = (x << 0) | (y << 5) | (z << 10) | (magic_enum::enum_integer(face) << 15);
+
+    return packed;
+}
+
+void generate_visible_faces(std::vector<PackedFace>& packed_faces, size_t x, size_t y, size_t z, const voxel::Chunk& chunk, BlockID air_id) {
+    if (z == 0              || chunk.data[x][y][z - 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Front));
+    if (z == CHUNK_SIZE - 1 || chunk.data[x][y][z + 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Back));
+    if (x == 0              || chunk.data[x - 1][y][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Left));
+    if (x == CHUNK_SIZE - 1 || chunk.data[x + 1][y][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Right));
+    if (y == 0              || chunk.data[x][y - 1][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Bottom));
+    if (y == CHUNK_SIZE - 1 || chunk.data[x][y + 1][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Top));
+}
+
 voxel::Mesh generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry) {
-    std::vector<voxel::Vertex> vertices;
-    std::vector<uint16_t> indices;
+    // Face instance data:
+    // 00000000000000FFFYYYYYZZZZZXXXXX
+    // F - face direction
+    // X, Y, Z position
+
+    voxel::Mesh mesh;
+    std::vector<voxel::PackedFace> packed_faces;
 
     auto iota = std::views::iota(size_t(0), CHUNK_SIZE);
 
     BlockID air_id = registry.get_block("skibidi:air")->id;
 
-    int i = 0;
     for (auto [x, y, z] : std::views::cartesian_product(iota, iota, iota)) {
         if (chunk.data[x][y][z].id == air_id) {
             continue;
         }
 
-        glm::vec3 voxel_pos = {x, y, z};
-        std::array<voxel::Vertex, 8> cube_vertices = {
-            voxel::Vertex { glm::vec3(0.0f, 0.0f, 1.0f) + voxel_pos },
-            voxel::Vertex { glm::vec3(1.0f, 0.0f, 1.0f) + voxel_pos },
-            voxel::Vertex { glm::vec3(0.0f, 1.0f, 1.0f) + voxel_pos },
-            voxel::Vertex { glm::vec3(1.0f, 1.0f, 1.0f) + voxel_pos },
-            voxel::Vertex { glm::vec3(0.0f, 0.0f, 0.0f) + voxel_pos },
-            voxel::Vertex { glm::vec3(1.0f, 0.0f, 0.0f) + voxel_pos },
-            voxel::Vertex { glm::vec3(0.0f, 1.0f, 0.0f) + voxel_pos },
-            voxel::Vertex { glm::vec3(1.0f, 1.0f, 0.0f) + voxel_pos },
-        };
-
-        vertices.insert(vertices.end(), cube_vertices.begin(), cube_vertices.end());
-
-        /* std::array<uint16_t, 36> cube_indices = {
-            static_cast<uint16_t>(0+i), static_cast<uint16_t>(1+i), static_cast<uint16_t>(3+i), static_cast<uint16_t>(3+i), static_cast<uint16_t>(1+i), static_cast<uint16_t>(2+i),
-            static_cast<uint16_t>(1+i), static_cast<uint16_t>(5+i), static_cast<uint16_t>(2+i), static_cast<uint16_t>(2+i), static_cast<uint16_t>(5+i), static_cast<uint16_t>(6+i),
-            static_cast<uint16_t>(5+i), static_cast<uint16_t>(4+i), static_cast<uint16_t>(6+i), static_cast<uint16_t>(6+i), static_cast<uint16_t>(4+i), static_cast<uint16_t>(7+i),
-            static_cast<uint16_t>(4+i), static_cast<uint16_t>(0+i), static_cast<uint16_t>(7+i), static_cast<uint16_t>(7+i), static_cast<uint16_t>(0+i), static_cast<uint16_t>(3+i),
-            static_cast<uint16_t>(3+i), static_cast<uint16_t>(2+i), static_cast<uint16_t>(7+i), static_cast<uint16_t>(7+i), static_cast<uint16_t>(2+i), static_cast<uint16_t>(6+i),
-            static_cast<uint16_t>(4+i), static_cast<uint16_t>(5+i), static_cast<uint16_t>(0+i), static_cast<uint16_t>(0+i), static_cast<uint16_t>(5+i), static_cast<uint16_t>(1+i),
-        }; */
-        std::array<uint16_t, 36> cube_indices = {
-            // front (z = 1)
-            0+i, 1+i, 2+i, 2+i, 1+i, 3+i,
-            // right (x = 1)
-            1+i, 5+i, 3+i, 3+i, 5+i, 7+i,
-            // back (z = 0)
-            5+i, 4+i, 7+i, 7+i, 4+i, 6+i,
-            // left (x = 0)
-            4+i, 0+i, 6+i, 6+i, 0+i, 2+i,
-            // top (y = 1)
-            2+i, 3+i, 6+i, 6+i, 3+i, 7+i,
-            // bottom (y = 0)
-            4+i, 5+i, 0+i, 0+i, 5+i, 1+i,
-        };
-
-        indices.insert(indices.end(), cube_indices.begin(), cube_indices.end());
-
-        i += 8;
+        generate_visible_faces(packed_faces, x, y, z, chunk, air_id);
     }
 
-    GPUMeshBuffers buffers = upload_mesh(render_state, std::span(vertices), std::span(indices));
+    auto pair = upload_buffer<true>(render_state, std::span(packed_faces));
+    mesh.buffer = pair.first.buffer;
+    mesh.buffer_addr = pair.second;
+    mesh.instance_count = packed_faces.size();
 
-    return voxel::Mesh { buffers, uint32_t(indices.size()) };
+    return mesh;
 };

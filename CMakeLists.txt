@@ -52,6 +52,7 @@ target_include_directories(VoxelGame PRIVATE "external/vkbootstrap")
 target_include_directories(VoxelGame PRIVATE "external/imgui")
 target_include_directories(VoxelGame PRIVATE "external/imgui/backends")
 target_include_directories(VoxelGame PRIVATE "external/nlohmann_json/include")
+target_include_directories(VoxelGame PRIVATE "external/magic_enum/include")
 target_include_directories(VoxelGame PRIVATE "external/ctre")
 
 #if(USE_FEATURE_X)

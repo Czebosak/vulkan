@@ -26,6 +26,8 @@
 #include <backends/vulkan/images.hpp>
 #include <backends/vulkan/pipeline_builder.hpp>
 
+#include <voxel/render_types.hpp>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -637,7 +639,7 @@ void Engine::init_voxel_pipeline() {
     VkPushConstantRange bufferRange = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = sizeof(GPUDrawPushConstants),
+        .size = sizeof(voxel::VoxelPushConstants),
     };
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {
@@ -650,7 +652,7 @@ void Engine::init_voxel_pipeline() {
     
     voxel_pipeline = hayvk::builders::PipelineBuilder { .pipeline_layout = voxel_pipeline_layout }
         .set_shaders(voxel_vertex_shader, voxel_frag_shader)
-        .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP)
         .set_polygon_mode(VK_POLYGON_MODE_FILL)
         .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
         .set_multisampling_none()
@@ -934,18 +936,16 @@ void Engine::draw_chunk(VkCommandBuffer cmd, const voxel::Chunk& chunk) {
     glm::mat4 vp = game_state.camera.get_matrix();
     //glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -1.0f));
 
-    GPUDrawPushConstants push_constants;
+    voxel::VoxelPushConstants push_constants;
 
     const voxel::Mesh& mesh = std::get<voxel::Mesh>(chunk.mesh_state);
 
     glm::mat4 mat = vp;
-    push_constants.world_matrix = mat;
-    push_constants.vertex_buffer = mesh.buffers.vertex_buffer_address;
+    push_constants.mvp = mat;
+    push_constants.face_buffer = mesh.buffer_addr;
+    vkCmdPushConstants(cmd, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(voxel::VoxelPushConstants), &push_constants);
 
-    vkCmdPushConstants(cmd, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
-    vkCmdBindIndexBuffer(cmd, mesh.buffers.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
-
-    vkCmdDrawIndexed(cmd, mesh.index_count, 1, 0, 0, 0);
+    vkCmdDraw(cmd, 4, mesh.instance_count, 0, 0);
 
     vkCmdEndRendering(cmd);
 }

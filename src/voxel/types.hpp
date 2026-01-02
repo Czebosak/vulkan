@@ -18,9 +18,29 @@ namespace voxel {
 
     struct Dirty {};
 
+    enum class Face : uint8_t {
+        Top,
+        Bottom,
+        Left,
+        Right,
+        Front,
+        Back
+    };
+
+    /* struct MeshFace {
+        VkBuffer buffer;
+        VkDeviceAddress buffer_addr;
+        uint32_t instance_count;
+    };
+
     struct Mesh {
-        GPUMeshBuffers buffers;
-        uint32_t index_count;
+        MeshFace faces[6];
+    }; */
+
+    struct Mesh {
+        VkBuffer buffer;
+        VkDeviceAddress buffer_addr;
+        uint32_t instance_count;
     };
 
     using MeshState = std::variant<Mesh, Dirty>;
