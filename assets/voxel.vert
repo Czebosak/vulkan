@@ -7,68 +7,76 @@ struct Face {
 };
 
 const Face FACES[6] = Face[6](
-    // +Y face (top) — normal (0,1,0)
+    // +Y face (top)
     Face(
         vec3[4](
-            vec3(0,1,0), // low Z, left
-            vec3(1,1,0), // low Z, right
-            vec3(0,1,1), // high Z, left
-            vec3(1,1,1)  // high Z, right
+            /* vec3(0,1,0),
+            vec3(1,1,0),
+            vec3(0,1,1),
+            vec3(1,1,1) */
+            vec3(0,1,0),
+            vec3(0,1,1),
+            vec3(1,1,0),
+            vec3(1,1,1)
         ),
         vec3(0,1,0)
     ),
 
-    // -Y face (bottom) — normal (0,-1,0)
+    // -Y face (bottom)
     Face(
         vec3[4](
-            vec3(0,0,0), // low Z, left
-            vec3(1,0,0), // low Z, right
-            vec3(0,0,1), // high Z, left
-            vec3(1,0,1)  // high Z, right
+            vec3(0,0,0),
+            vec3(1,0,0),
+            vec3(0,0,1),
+            vec3(1,0,1)
         ),
         vec3(0,-1,0)
     ),
 
-    // -X face (left) — normal (-1,0,0)
+    // -X face (left)
     Face(
         vec3[4](
-            vec3(0,0,0), // low Y, low Z
-            vec3(0,0,1), // low Y, high Z
-            vec3(0,1,0), // high Y, low Z
-            vec3(0,1,1)  // high Y, high Z
+            vec3(0,0,0),
+            vec3(0,0,1),
+            vec3(0,1,0),
+            vec3(0,1,1)
         ),
         vec3(-1,0,0)
     ),
 
-    // +X face (right) — normal (1,0,0)
+    // +X face (right)
     Face(
         vec3[4](
-            vec3(1,0,0), // low Y, low Z
-            vec3(1,0,1), // low Y, high Z
-            vec3(1,1,0), // high Y, low Z
-            vec3(1,1,1)  // high Y, high Z
+            /* vec3(1,0,0),
+            vec3(1,0,1),
+            vec3(1,1,0),
+            vec3(1,1,1) */
+            vec3(1,0,0),
+            vec3(1,1,0),
+            vec3(1,0,1),
+            vec3(1,1,1)
         ),
         vec3(1,0,0)
     ),
 
-    // +Z face (front) — normal (0,0,1)
+    // +Z face (front)
     Face(
         vec3[4](
-            vec3(0,0,1), // low Y, left
-            vec3(1,0,1), // low Y, right
-            vec3(0,1,1), // high Y, left
-            vec3(1,1,1)  // high Y, right
+            vec3(0,0,1),
+            vec3(1,0,1),
+            vec3(0,1,1),
+            vec3(1,1,1)
         ),
         vec3(0,0,1)
     ),
 
-    // -Z face (back) — normal (0,0,-1)
+    // -Z face (back)
     Face(
         vec3[4](
-            vec3(0,0,0), // low Y, left
-            vec3(1,0,0), // low Y, right
-            vec3(0,1,0), // high Y, left
-            vec3(1,1,0)  // high Y, right
+            vec3(0,0,0),
+            vec3(0,1,0),
+            vec3(1,0,0),
+            vec3(1,1,0)
         ),
         vec3(0,0,-1)
     )

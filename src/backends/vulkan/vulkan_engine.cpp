@@ -740,7 +740,7 @@ void Engine::init_default_data() {
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::angleAxis(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
         //glm::perspective(glm::radians(70.0f), 640.0f / 480.0f, 0.1f, 10000.0f)
-        glm::perspective(glm::radians(70.0f), (float)swapchain_extent.width / (float)swapchain_extent.height, 0.1f, 10000.0f)
+        glm::perspectiveZO(glm::radians(70.0f), (float)swapchain_extent.width / (float)swapchain_extent.height, 10000.0f, 0.1f)
     );
 
     if (game_state.chunk.is_dirty()) {

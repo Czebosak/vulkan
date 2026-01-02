@@ -37,8 +37,8 @@ uint32_t pack_face(size_t x, size_t y, size_t z, Face face) {
 }
 
 void generate_visible_faces(std::vector<PackedFace>& packed_faces, size_t x, size_t y, size_t z, const voxel::Chunk& chunk, BlockID air_id) {
-    if (z == 0              || chunk.data[x][y][z - 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Front));
-    if (z == CHUNK_SIZE - 1 || chunk.data[x][y][z + 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Back));
+    if (z == 0              || chunk.data[x][y][z - 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Back));
+    if (z == CHUNK_SIZE - 1 || chunk.data[x][y][z + 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Front));
     if (x == 0              || chunk.data[x - 1][y][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Left));
     if (x == CHUNK_SIZE - 1 || chunk.data[x + 1][y][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Right));
     if (y == 0              || chunk.data[x][y - 1][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Bottom));
