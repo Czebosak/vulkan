@@ -18,9 +18,9 @@ GameState::GameState() {
 
     registry.lock();
     
-    world_generator = WorldGenerator();
+    //world_generator = WorldGenerator();
 
-    chunk = world_generator.generate_chunk(glm::ivec3(0, 0, 0), registry);
+    //chunk = world_generator.generate_chunk(glm::ivec3(0, 0, 0), registry);
 
     //chunk.mesh_state = voxel::Dirty {};
     //chunk.data[0][0].fill(voxel::Block { registry.get_block("skibidi:air")->id });
@@ -35,6 +35,8 @@ GameState::~GameState() {
 }
 
 void GameState::main_loop(const Input& input, float delta) {
+    chunk_manager.update(camera.position, 3, 3);
+
     glm::vec2 mouse_delta = input.get_mouse_delta();
     if (mouse_delta.x != 0.0f || mouse_delta.y != 0.0f) {
         yaw -= mouse_delta.x * 0.001f;

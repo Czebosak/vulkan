@@ -6,12 +6,13 @@
 
 #include <voxel/types.hpp>
 #include <voxel/world_generator.hpp>
+#include <voxel/chunk_manager.hpp>
 
 class GameState {
 public:
     Camera camera;
 
-    voxel::Chunk chunk;
+    voxel::ChunkManager chunk_manager;
 
     WorldGenerator world_generator;
 

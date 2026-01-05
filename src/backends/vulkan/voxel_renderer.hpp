@@ -1,0 +1,85 @@
+#pragma once
+#include <vulkan/vulkan.h>
+
+#include <glm/glm.hpp>
+
+#include <bitset>
+
+#include <backends/vulkan/render_state.hpp>
+
+#include <voxel/chunk_manager.hpp>
+#include <voxel/render_types.hpp>
+
+namespace voxel::renderer {
+    struct VoxelPushConstants {
+        glm::mat4 mvp;
+        VkDeviceAddress face_buffer;
+    };
+
+    struct AllocInfo {
+        VkDeviceAddress allocated_addr;
+        size_t buffer_index;
+    };
+
+    class VoxelRenderer {
+    private:
+        constexpr static size_t BLOCK_SIZE = 4 * 1024; // 4KB
+        constexpr static size_t TOTAL_BUFFER_SIZE = 64 * 1024 * 1024; // 64MB
+        constexpr static size_t BLOCK_COUNT = TOTAL_BUFFER_SIZE / BLOCK_SIZE;
+
+        static_assert(TOTAL_BUFFER_SIZE == BLOCK_SIZE * BLOCK_COUNT);
+
+        class Buffer {
+        private:
+            std::bitset<BLOCK_SIZE> blocks;
+
+            struct ContinuityResult {
+                bool found;
+                size_t new_i;
+            };
+
+            ContinuityResult check_continuity(size_t i, size_t needed_length);
+
+            AllocatedBuffer gpu_buffer;
+            VkDeviceAddress addr;
+
+            Buffer();
+        public:
+            static Buffer create(RenderState& render_state);
+
+            // if allocation fails return BLOCK_COUNT
+            size_t allocate(size_t n);
+
+            void free(size_t i, size_t length);
+
+            void destroy(RenderState& render_state);
+
+            inline VkBuffer get_buffer_handle();
+
+            inline VkDeviceAddress get_buffer_addr();
+
+            void print() const;
+        };
+        
+        VkBuffer chunk_buffer;
+
+        VkCommandPool command_pool;
+        VkCommandBuffer render_cmd_buffer;
+
+        VkPipeline voxel_pipeline;
+        VkPipelineLayout voxel_pipeline_layout;
+
+        AllocatedBuffer buffer_staging_buffer;
+
+        std::vector<Buffer> buffers;
+    public:
+        void init(RenderState& render_state);
+
+        // Size required in bytes, returns pointer to the allocated memory
+        AllocInfo allocate_mesh(RenderState& render_state, std::span<PackedFace> data);
+
+        VkCommandBuffer draw(RenderState& render_state, ChunkManager& chunk_manager, VkFormat color_attachment_format, VkFormat depth_attachment_format, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, const glm::mat4& camera_matrix);
+
+        void destroy(RenderState& render_state);
+    };
+}

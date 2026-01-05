@@ -6,5 +6,5 @@ layout (location = 1) in vec3 inNormal;
 layout (location = 0) out vec4 outFragColor;
 
 void main() {
-	outFragColor = vec4(inNormal * 0.5 + 0.5, 1.0);
+	outFragColor = vec4(abs(inNormal), 1.0);
 }

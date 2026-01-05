@@ -38,9 +38,9 @@ namespace voxel {
     }; */
 
     struct Mesh {
-        VkBuffer buffer;
-        VkDeviceAddress buffer_addr;
-        uint32_t instance_count;
+        VkDeviceAddress allocated_addr;
+        uint32_t buffer_index;
+        uint32_t face_count;
     };
 
     using MeshState = std::variant<Mesh, Dirty>;

@@ -25,7 +25,7 @@
 constexpr uint32_t WIDTH = 1920;
 constexpr uint32_t HEIGHT = 1080;
 
-constexpr bool ENABLE_VALIDATION_LAYERS = true;
+constexpr bool ENABLE_VALIDATION_LAYERS = false;
 
 struct ComputePushConstants {
     glm::vec4 data1;
@@ -33,6 +33,8 @@ struct ComputePushConstants {
     glm::vec4 data3;
     glm::vec4 data4;
 };
+
+inline PFN_vkSetDebugUtilsObjectNameEXT fuck_vkSetDebugUtilsObjectNameEXT;
 
 class RenderState;
 
@@ -74,7 +76,7 @@ private:
 
     uint frame_number = 0;
 
-    inline FrameData& get_current_frame() { return frames[frame_number % FRAME_OVERLAP]; };
+    inline FrameData& get_current_frame() { return frames[0]; };
 
     FrameData frames[FRAME_OVERLAP];
 
@@ -101,7 +103,7 @@ private:
 
     GPUMeshBuffers rectangle;
 
-    voxel::Mesh chunk_mesh;
+    voxel::renderer::VoxelRenderer voxel_renderer;
 
     input::Input input;
 

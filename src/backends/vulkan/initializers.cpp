@@ -21,12 +21,12 @@ namespace vkinit {
         return info;
     }
     
-    VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags) {
+    VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags, VkCommandBufferInheritanceInfo* inheritance_info_ptr) {
         VkCommandBufferBeginInfo info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .pNext = nullptr,
             .flags = flags,
-            .pInheritanceInfo = nullptr,
+            .pInheritanceInfo = inheritance_info_ptr,
         };
 
         return info;

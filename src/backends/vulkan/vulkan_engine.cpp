@@ -124,6 +124,7 @@ uint32_t Engine::init_vulkan(GLFWwindow *window) {
     //make the vulkan instance, with basic debug features
     auto inst_ret = builder.set_app_name("Epic Voxel Engine")
         .request_validation_layers(ENABLE_VALIDATION_LAYERS)
+        .enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
         .use_default_debug_messenger()
         .require_api_version(1, 3, 0)
         .build();
@@ -133,6 +134,8 @@ uint32_t Engine::init_vulkan(GLFWwindow *window) {
     //grab the instance 
     instance = vkb_inst.instance;
     debug_messenger = vkb_inst.debug_messenger;
+
+    fuck_vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
     
     if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) return -6;
 
@@ -285,7 +288,7 @@ void Engine::create_swapchain(uint32_t width, uint32_t height) {
         //.use_default_format_selection()
         .set_desired_format(VkSurfaceFormatKHR{ .format = swapchain_image_format, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
         //use vsync present mode
-        .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+        .set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
         .set_desired_extent(width, height)
         .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
         .build()
@@ -460,7 +463,7 @@ void Engine::init_pipelines() {
 
     init_triangle_pipeline();
     init_mesh_pipeline();
-    init_voxel_pipeline();
+    //init_voxel_pipeline();
 }
 
 void Engine::init_imgui() {
@@ -489,6 +492,15 @@ void Engine::init_imgui() {
 
     VkDescriptorPool imgui_pool;
     VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &imgui_pool));
+    if constexpr (ENABLE_VALIDATION_LAYERS) {
+        VkDebugUtilsObjectNameInfoEXT name_info = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .objectType = VK_OBJECT_TYPE_DESCRIPTOR_POOL,
+            .objectHandle = (uint64_t)imgui_pool,
+            .pObjectName = "imgui descriptor pool",
+        };
+        fuck_vkSetDebugUtilsObjectNameEXT(device, &name_info);
+    }
 
     // 2: initialize imgui library
 
@@ -536,19 +548,19 @@ void Engine::init_triangle_pipeline() {
     auto triangle_frag_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.frag.spv");
     if (triangle_frag_shader_opt) {
         triangle_frag_shader = *triangle_frag_shader_opt;
-        fmt::print("Triangle fragment shader succesfully loaded");
+        fmt::println("Triangle fragment shader succesfully loaded");
     } else {
-        fmt::print("Error when building the triangle fragment shader module");
+        fmt::println("Error when building the triangle fragment shader module");
     }
 
     VkShaderModule triangle_vertex_shader;
     auto triangle_vertex_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.vert.spv");
     if (triangle_vertex_shader_opt) {
         triangle_vertex_shader = *triangle_vertex_shader_opt;
-        fmt::print("Triangle vertex shader succesfully loaded");
+        fmt::println("Triangle vertex shader succesfully loaded");
     }
     else {
-        fmt::print("Error when building the triangle vertex shader module");
+        fmt::println("Error when building the triangle vertex shader module");
     }
     
     //build the pipeline layout that controls the inputs/outputs of the shader
@@ -583,19 +595,19 @@ void Engine::init_mesh_pipeline() {
     auto triangle_frag_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle.frag.spv");
     if (triangle_frag_shader_opt) {
         triangle_frag_shader = *triangle_frag_shader_opt;
-        fmt::print("Triangle fragment shader succesfully loaded");
+        fmt::println("Triangle fragment shader succesfully loaded");
     } else {
-        fmt::print("Error when building the triangle fragment shader module");
+        fmt::println("Error when building the triangle fragment shader module");
     }
 
     VkShaderModule triangle_vertex_shader;
     auto triangle_vertex_shader_opt = vkutil::load_shader_module(device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/colored_triangle_mesh.vert.spv");
     if (triangle_vertex_shader_opt) {
         triangle_vertex_shader = *triangle_vertex_shader_opt;
-        fmt::print("Triangle vertex shader succesfully loaded");
+        fmt::println("Triangle vertex shader succesfully loaded");
     }
     else {
-        fmt::print("Error when building the triangle vertex shader module");
+        fmt::println("Error when building the triangle vertex shader module");
     }
     
     VkPushConstantRange bufferRange = {
@@ -742,10 +754,6 @@ void Engine::init_default_data() {
         //glm::perspective(glm::radians(70.0f), 640.0f / 480.0f, 0.1f, 10000.0f)
         glm::perspectiveZO(glm::radians(70.0f), (float)swapchain_extent.width / (float)swapchain_extent.height, 10000.0f, 0.1f)
     );
-
-    if (game_state.chunk.is_dirty()) {
-        game_state.chunk.mesh_state = generate_mesh(render_state, game_state.chunk, registry::Registry::get());
-    }
 }
 
 //
@@ -780,11 +788,24 @@ uint32_t Engine::init() {
     init_sync_structures();
     init_descriptors();
 
-    render_state = RenderState(this, device, allocator);
+    render_state = {
+        this,
+        device,
+        graphics_queue_family,
+        allocator,
+        draw_extent,
+        draw_image.image_format,
+        depth_image.image_format,
+    };
 
     init_pipelines();
     init_imgui();
     init_default_data();
+
+    voxel_renderer.init(render_state);
+    deletion_queue.push_function([&]() {
+        voxel_renderer.destroy(render_state);
+    });
 
     push_constants = {
         .data1 = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
@@ -928,10 +949,10 @@ void Engine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdEndRendering(cmd);
 }
 
-void Engine::draw_chunk(VkCommandBuffer cmd, const voxel::Chunk& chunk) {
+/* void Engine::    (VkCommandBuffer cmd, const voxel::Chunk& chunk) {
     //begin a render pass  connected to our draw image
     VkRenderingAttachmentInfo color_attachment = vkinit::attachment_info(draw_image.image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingAttachmentInfo depth_attachment = vkinit::depth_attachment_info(depth_image.image_view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo depth_attachment = vkinit::depth_attachment_info(depth_image.image_view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     VkRenderingInfo render_info = vkinit::rendering_info(draw_extent, &color_attachment, &depth_attachment);
     vkCmdBeginRendering(cmd, &render_info);
@@ -956,8 +977,6 @@ void Engine::draw_chunk(VkCommandBuffer cmd, const voxel::Chunk& chunk) {
 
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline);
-
     glm::mat4 vp = game_state.camera.get_matrix();
     //glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -1.0f));
 
@@ -973,7 +992,7 @@ void Engine::draw_chunk(VkCommandBuffer cmd, const voxel::Chunk& chunk) {
     vkCmdDraw(cmd, 4, mesh.instance_count, 0, 0);
 
     vkCmdEndRendering(cmd);
-}
+} */
 
 void Engine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
     VK_CHECK(vkResetFences(device, 1, &imm_fence));
@@ -1022,6 +1041,8 @@ void Engine::draw() {
     draw_extent.width = draw_image.image_extent.width;
     draw_extent.height = draw_image.image_extent.height;
 
+    render_state.draw_extent = draw_extent;
+
     VkSemaphore& submit_semaphore = swapchain_images[image_index].submit_semaphore;
 
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));
@@ -1036,7 +1057,14 @@ void Engine::draw() {
     vkutil::transition_image(cmd, depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     //draw_geometry(cmd);
-    draw_chunk(cmd, game_state.chunk);
+    //draw_chunk(cmd, game_state.chunk);
+    glm::mat4 camera_mat = game_state.camera.get_matrix();
+
+    VkRenderingAttachmentInfo color_attachment = vkinit::attachment_info(draw_image.image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingAttachmentInfo depth_attachment = vkinit::depth_attachment_info(depth_image.image_view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+    VkCommandBuffer voxel_cmds = voxel_renderer.draw(render_state, game_state.chunk_manager, draw_image.image_format, depth_image.image_format, color_attachment, depth_attachment, camera_mat);
+    vkCmdExecuteCommands(cmd, 1, &voxel_cmds);
 
     //transition the draw image and the swapchain image into their correct transfer layouts
     vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);

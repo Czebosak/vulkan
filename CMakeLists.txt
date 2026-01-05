@@ -6,6 +6,11 @@ project(VoxelGame)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+#set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type")
+
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+#set(CMAKE_C_FLAGS_RELEASE "-O3")
+
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(fmt REQUIRED)

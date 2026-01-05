@@ -1,0 +1,297 @@
+#include "voxel_renderer.hpp"
+
+#include <fmt/core.h>
+
+#include <backends/vulkan/defines.hpp>
+#include <backends/vulkan/initializers.hpp>
+#include <backends/vulkan/pipeline_builder.hpp>
+
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <voxel/mesh_generation.hpp>
+
+namespace voxel::renderer {
+    VoxelRenderer::Buffer::Buffer() {}
+
+    VoxelRenderer::Buffer VoxelRenderer::Buffer::create(RenderState& render_state) {
+        VoxelRenderer::Buffer buffer;
+        buffer.gpu_buffer = AllocatedBuffer::create(render_state, TOTAL_BUFFER_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
+        VkBufferDeviceAddressInfo device_adress_info = { .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer.gpu_buffer.buffer };
+        buffer.addr = vkGetBufferDeviceAddress(render_state.device, &device_adress_info);
+
+        buffer.blocks.set();
+        return buffer;
+    }
+
+    VoxelRenderer::Buffer::ContinuityResult VoxelRenderer::Buffer::check_continuity(size_t i, size_t needed_length) {
+        size_t contig_i = i;
+        while (contig_i != blocks.size() && blocks[contig_i] != 0) {
+            if (contig_i - i + 1 == needed_length) {
+                for (size_t set_i = i; set_i <= contig_i; set_i++) {
+                    blocks[set_i] = 0;
+                }
+                return { true };
+            }
+            contig_i++;
+        }
+        return { false, contig_i };
+    }
+
+    size_t VoxelRenderer::Buffer::allocate(size_t n) {
+        size_t i = 0;
+
+        auto res = check_continuity(i, n);
+        if (res.found) return i;
+        i = res.new_i;
+
+        while ((i = blocks._Find_next(i)) != blocks.size()) {
+            size_t contig_i = i;
+            auto res = check_continuity(i, n);
+            if (res.found) return i;
+
+            i = res.new_i;
+        }
+
+        return BLOCK_COUNT;
+    }
+
+    void VoxelRenderer::Buffer::free(size_t i, size_t length) {
+        for (size_t bit_i = i; bit_i < (i + length); bit_i++) {
+            blocks[bit_i] = 1;
+        }
+    }
+
+    void VoxelRenderer::Buffer::destroy(RenderState& render_state) {
+        gpu_buffer.destroy(render_state.allocator);
+    }
+
+    inline VkBuffer VoxelRenderer::Buffer::get_buffer_handle() {
+        return gpu_buffer.buffer;
+    }
+
+    inline VkDeviceAddress VoxelRenderer::Buffer::get_buffer_addr() {
+        return addr;
+    }
+
+    void VoxelRenderer::Buffer::print() const {
+        for (int i = 0; i < 64; i++)
+            fmt::print("{}", (int)!(blocks[i]));
+        fmt::print("\n");
+    }
+
+    void VoxelRenderer::init(RenderState& render_state) {
+        VkCommandPoolCreateInfo command_pool_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = render_state.queue_family_index,
+        };
+
+        VK_CHECK(vkCreateCommandPool(render_state.device, &command_pool_info, nullptr, &command_pool));
+
+        VkCommandBufferAllocateInfo cmd_alloc_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .commandPool = command_pool,
+            .level = VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+            .commandBufferCount = 1,
+        };
+
+        VK_CHECK(vkAllocateCommandBuffers(render_state.device, &cmd_alloc_info, &render_cmd_buffer));
+
+        VkShaderModule voxel_frag_shader;
+        auto voxel_frag_shader_opt = vkutil::load_shader_module(render_state.device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/voxel.frag.spv");
+        if (voxel_frag_shader_opt) {
+            voxel_frag_shader = *voxel_frag_shader_opt;
+            fmt::println("Voxel fragment shader succesfully loaded");
+        } else {
+            fmt::println("Error when building the voxel fragment shader module");
+        }
+
+        VkShaderModule voxel_vertex_shader;
+        auto voxel_vertex_shader_opt = vkutil::load_shader_module(render_state.device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/voxel.vert.spv");
+        if (voxel_vertex_shader_opt) {
+            voxel_vertex_shader = *voxel_vertex_shader_opt;
+            fmt::println("Voxel vertex shader succesfully loaded");
+        }
+        else {
+            fmt::println("Error when building the voxel vertex shader module");
+        }
+        
+        VkPushConstantRange bufferRange = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .offset = 0,
+            .size = sizeof(voxel::VoxelPushConstants),
+        };
+
+        VkPipelineLayoutCreateInfo pipeline_layout_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &bufferRange,
+        };
+
+        VK_CHECK(vkCreatePipelineLayout(render_state.device, &pipeline_layout_info, nullptr, &voxel_pipeline_layout));
+        
+        voxel_pipeline = hayvk::builders::PipelineBuilder { .pipeline_layout = voxel_pipeline_layout }
+            .set_shaders(voxel_vertex_shader, voxel_frag_shader)
+            .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP)
+            .set_polygon_mode(VK_POLYGON_MODE_FILL)
+            .set_cull_mode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
+            .set_multisampling_none()
+            .disable_blending()
+            .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
+            .set_color_attachment_format(render_state.draw_image_format)
+            .set_depth_format(render_state.depth_image_format)
+            .build(render_state.device);
+
+        vkDestroyShaderModule(render_state.device, voxel_frag_shader, nullptr);
+        vkDestroyShaderModule(render_state.device, voxel_vertex_shader, nullptr);
+
+        buffer_staging_buffer = AllocatedBuffer::create(render_state, TOTAL_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+
+        buffers.emplace_back(Buffer::create(render_state));
+    }
+
+    AllocInfo VoxelRenderer::allocate_mesh(RenderState& render_state, std::span<PackedFace> data) {
+        size_t size = data.size_bytes();
+        size_t needed_blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+        size_t block_i = BLOCK_COUNT;
+        int buf_i = 0;
+        for (buf_i; buf_i < buffers.size(); buf_i++) {
+            size_t temp_block_i = buffers[buf_i].allocate(needed_blocks);
+            if (block_i != BLOCK_COUNT) {
+                block_i = temp_block_i;
+                break;
+            }
+        }
+
+        if (block_i == BLOCK_COUNT) {
+            buf_i = buffers.size();
+            block_i = buffers.emplace_back(Buffer::create(render_state)).allocate(needed_blocks);
+        }
+
+        memcpy(buffer_staging_buffer.info.pMappedData, data.data(), size);
+
+        render_state.immediate_submit([&](VkCommandBuffer cmd) {
+            VkBufferCopy data_copy = {
+                .srcOffset = 0,
+                .dstOffset = block_i * BLOCK_SIZE,
+                .size = size,
+            };
+
+            vkCmdCopyBuffer(cmd, buffer_staging_buffer.buffer, buffers[buf_i].get_buffer_handle(), 1, &data_copy);
+        });
+
+        return AllocInfo {
+            .allocated_addr = buffers[buf_i].get_buffer_addr() + block_i * BLOCK_SIZE,
+            .buffer_index = static_cast<size_t>(buf_i),
+        };
+    }
+
+    VkCommandBuffer VoxelRenderer::draw(RenderState& render_state, ChunkManager& chunk_manager, VkFormat color_attachment_format, VkFormat depth_attachment_format, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, const glm::mat4& camera_matrix) {
+        VK_CHECK(vkResetCommandBuffer(render_cmd_buffer, 0));
+
+        VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
+            .pNext = NULL,
+            .flags = 0, // usually 0
+            .viewMask = 0, // for multiview; 0 if not using it
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &color_attachment_format, // array of VkFormat
+            .depthAttachmentFormat = depth_attachment_format, // VK_FORMAT_UNDEFINED if none
+            .stencilAttachmentFormat = VK_FORMAT_UNDEFINED, // VK_FORMAT_UNDEFINED if none
+            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT // or whatever you're using
+        };
+
+        VkCommandBufferInheritanceInfo inheritance_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+            .pNext = &inheritance_rendering_info,
+            .renderPass = VK_NULL_HANDLE, // ignored with dynamic rendering
+            .subpass = 0, // ignored
+            .framebuffer = VK_NULL_HANDLE, // ignored
+            .occlusionQueryEnable = VK_FALSE,
+            .queryFlags = 0,
+            .pipelineStatistics = 0
+        };
+
+        VkCommandBufferBeginInfo cmd_begin_info = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, &inheritance_info);
+        VK_CHECK(vkBeginCommandBuffer(render_cmd_buffer, &cmd_begin_info));
+
+        VkRenderingInfo render_info = vkinit::rendering_info(render_state.draw_extent, &color_attachment, &depth_attachment);
+        vkCmdBeginRendering(render_cmd_buffer, &render_info);
+
+        vkCmdBindPipeline(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline);
+
+        VkViewport viewport = {
+            .x = 0,
+            .y = 0,
+            .width = (float)render_state.draw_extent.width,
+            .height = (float)render_state.draw_extent.height,
+            .minDepth = 0.f,
+            .maxDepth = 1.f,
+        };
+
+        vkCmdSetViewport(render_cmd_buffer, 0, 1, &viewport);
+
+        VkRect2D scissor = {
+            .offset = {0, 0},
+            .extent = render_state.draw_extent,
+        };
+
+        vkCmdSetScissor(render_cmd_buffer, 0, 1, &scissor);
+
+        VoxelPushConstants push_constants;
+
+        const auto& registry = registry::Registry::get();
+        for (auto& [position, chunk] : chunk_manager.chunks) {
+            if (chunk.is_dirty()) {
+                std::vector<PackedFace> faces = generate_mesh(render_state, chunk, registry);
+
+                if (faces.size() != 0) {
+                    AllocInfo alloc_info = allocate_mesh(render_state, faces);
+
+                    chunk.mesh_state = Mesh {
+                        .allocated_addr = alloc_info.allocated_addr,
+                        .buffer_index = static_cast<uint32_t>(alloc_info.buffer_index),
+                        .face_count = static_cast<uint32_t>(faces.size()),
+                    };
+                } else {
+                    chunk.mesh_state = {};
+                }
+            }
+
+            const Mesh& mesh = std::get<Mesh>(chunk.mesh_state);
+
+            if (mesh.face_count == 0) {
+                continue;
+            }
+
+            push_constants.mvp = camera_matrix * glm::translate(glm::mat4(1.0f), glm::vec3(position * 16));
+            push_constants.face_buffer = mesh.allocated_addr;
+            vkCmdPushConstants(render_cmd_buffer, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VoxelPushConstants), &push_constants);
+
+            vkCmdDraw(render_cmd_buffer, 4, mesh.face_count, 0, 0);
+        }
+
+        vkCmdEndRendering(render_cmd_buffer);
+
+        VK_CHECK(vkEndCommandBuffer(render_cmd_buffer));
+
+        return render_cmd_buffer;
+    }
+
+    void VoxelRenderer::destroy(RenderState& render_state) {
+        for (Buffer& buf : buffers) {
+            buf.destroy(render_state);
+        }
+
+        buffer_staging_buffer.destroy(render_state.allocator);
+
+        vkDestroyPipelineLayout(render_state.device, voxel_pipeline_layout, nullptr);
+        vkDestroyPipeline(render_state.device, voxel_pipeline, nullptr);
+
+        vkDestroyCommandPool(render_state.device, command_pool, nullptr);
+    }
+}

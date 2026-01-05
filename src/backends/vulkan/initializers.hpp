@@ -7,7 +7,7 @@ namespace vkinit {
 
     VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
 
-    VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags = 0);
+    VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags = 0, VkCommandBufferInheritanceInfo* inheritance_info = nullptr);
 
     VkImageSubresourceRange image_subresource_range(VkImageAspectFlags aspect_mask);
 

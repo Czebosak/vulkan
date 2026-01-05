@@ -1006,6 +1006,8 @@
 
 #include <engine.hpp>
 
+#include <backends/vulkan/voxel_renderer.hpp>
+
 int main() {
     Engine engine;
 
