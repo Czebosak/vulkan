@@ -25,7 +25,11 @@
 constexpr uint32_t WIDTH = 1920;
 constexpr uint32_t HEIGHT = 1080;
 
+#ifdef NDEBUG
 constexpr bool ENABLE_VALIDATION_LAYERS = false;
+#else
+constexpr bool ENABLE_VALIDATION_LAYERS = true;
+#endif
 
 struct ComputePushConstants {
     glm::vec4 data1;

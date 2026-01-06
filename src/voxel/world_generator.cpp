@@ -19,7 +19,7 @@ Chunk WorldGenerator::generate_chunk(glm::ivec3 chunk_position, const registry::
     Chunk chunk = { .mesh_state = Dirty {} };
 
     float heights[CHUNK_SIZE][CHUNK_SIZE];
-    fnFractal->GenUniformGrid2D(&heights[0][0], (float)(chunk_position.x * CHUNK_SIZE), (float)(chunk_position.z * CHUNK_SIZE), CHUNK_SIZE, CHUNK_SIZE, 1.0f, 1.0f, seed);
+    fnFractal->GenUniformGrid2D(&heights[0][0], static_cast<float>(chunk_position.x * CHUNK_SIZE), static_cast<float>(chunk_position.z * CHUNK_SIZE), CHUNK_SIZE, CHUNK_SIZE, 1.0f, 1.0f, seed);
 
     auto iota = std::views::iota(size_t(0), CHUNK_SIZE);
 

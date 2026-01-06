@@ -135,7 +135,9 @@ uint32_t Engine::init_vulkan(GLFWwindow *window) {
     instance = vkb_inst.instance;
     debug_messenger = vkb_inst.debug_messenger;
 
+    #ifndef NDEBUG
     fuck_vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
+    #endif
     
     if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) return -6;
 
@@ -492,15 +494,15 @@ void Engine::init_imgui() {
 
     VkDescriptorPool imgui_pool;
     VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &imgui_pool));
-    if constexpr (ENABLE_VALIDATION_LAYERS) {
-        VkDebugUtilsObjectNameInfoEXT name_info = {
-            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-            .objectType = VK_OBJECT_TYPE_DESCRIPTOR_POOL,
-            .objectHandle = (uint64_t)imgui_pool,
-            .pObjectName = "imgui descriptor pool",
-        };
-        fuck_vkSetDebugUtilsObjectNameEXT(device, &name_info);
-    }
+    #ifndef NDEBUG
+    VkDebugUtilsObjectNameInfoEXT name_info = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = VK_OBJECT_TYPE_DESCRIPTOR_POOL,
+        .objectHandle = (uint64_t)imgui_pool,
+        .pObjectName = "imgui descriptor pool",
+    };
+    fuck_vkSetDebugUtilsObjectNameEXT(device, &name_info);
+    #endif
 
     // 2: initialize imgui library
 
