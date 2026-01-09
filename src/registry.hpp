@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+class ModuleLoader;
+
 namespace registry {
     struct BlockDefinition {
         voxel::BlockID id;
@@ -63,9 +65,13 @@ namespace registry {
         Registry(const Registry&) = delete;
         Registry& operator=(const Registry&) = delete;
 
+        Namespace* get_namespace(std::string_view name);
+
         // The reference is only guaranteed to be valid
         // as long as new namespaces aren't created
-        Namespace& register_namespace(std::string name);
+        Namespace* register_namespace(std::string name);
+
+        friend ModuleLoader;
     public:
         static void create();
         static void destroy();

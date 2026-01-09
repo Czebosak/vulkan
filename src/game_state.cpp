@@ -7,6 +7,8 @@
 using Registry = registry::Registry;
 using namespace input;
 
+#include <components/components.hpp>
+
 GameState::GameState() {
     yaw = 0.0f;
     pitch = 0.0f;
@@ -17,6 +19,12 @@ GameState::GameState() {
     registry.register_json_file("/home/czebosak/Development/cpp/graphics/vulkan/example.json");
 
     registry.lock();
+
+    world.entity()
+        .add<Entity>()
+        .set<Transform>({ glm::dvec3(0.0), glm::quat(), glm::vec3(0.0f) })
+        .set<Velocity>({ glm::vec3(0.0f) })
+        .add<Player>();
     
     //world_generator = WorldGenerator();
 

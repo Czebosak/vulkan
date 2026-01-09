@@ -1,7 +1,6 @@
 #include "mesh_generation.hpp"
 
 #include <vector>
-#include <algorithm>
 #include <ranges>
 
 #include <voxel/render_types.hpp>
@@ -36,16 +35,55 @@ uint32_t pack_face(size_t x, size_t y, size_t z, Face face) {
     return packed;
 }
 
-void generate_visible_faces(std::vector<PackedFace>& packed_faces, size_t x, size_t y, size_t z, const voxel::Chunk& chunk, BlockID air_id) {
-    if (z != 0              && chunk.data[x][y][z - 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Back));
-    if (z != CHUNK_SIZE - 1 && chunk.data[x][y][z + 1].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Front));
-    if (x != 0              && chunk.data[x - 1][y][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Left));
-    if (x != CHUNK_SIZE - 1 && chunk.data[x + 1][y][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Right));
-    if (y != 0              && chunk.data[x][y - 1][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Bottom));
-    if (y != CHUNK_SIZE - 1 && chunk.data[x][y + 1][z].id == air_id) packed_faces.emplace_back(pack_face(x, y, z, Face::Top));
+inline void generate_visible_faces(std::vector<PackedFace>& packed_faces, size_t x, size_t y, size_t z, const voxel::Chunk& chunk, NeighboringChunks& n, BlockID air_id) {
+    auto create_face = [&](Face f) {
+        packed_faces.emplace_back(pack_face(x, y, z, f));
+    };
+
+    // Back
+    if (z == 0) {
+        if (n.back && n.back->data[x][y][CHUNK_SIZE - 1].id == air_id) create_face(Face::Back);
+    } else if (chunk.data[x][y][z - 1].id == air_id) {
+        create_face(Face::Back);
+    }
+
+    // Front
+    if (z == CHUNK_SIZE - 1) {
+         if (n.front && n.front->data[x][y][0].id == air_id) create_face(Face::Front);
+    } else if (chunk.data[x][y][z + 1].id == air_id) {
+        create_face(Face::Front);
+    }
+
+    // Left
+    if (x == 0) {
+        if (n.left && n.left->data[CHUNK_SIZE - 1][y][z].id == air_id) create_face(Face::Left);
+    } else if (chunk.data[x - 1][y][z].id == air_id) {
+        create_face(Face::Left);
+    }
+
+    // Right
+    if (x == CHUNK_SIZE - 1) {
+         if (n.right && n.right->data[0][y][z].id == air_id) create_face(Face::Right);
+    } else if (chunk.data[x + 1][y][z].id == air_id) {
+        create_face(Face::Right);
+    }
+
+    // Bottom
+    if (y == 0) {
+         if (n.bottom && n.bottom->data[x][CHUNK_SIZE - 1][z].id == air_id) create_face(Face::Bottom);
+    } else if (chunk.data[x][y - 1][z].id == air_id) {
+        create_face(Face::Bottom);
+    }
+
+    // Top
+    if (y == CHUNK_SIZE - 1) {
+         if (n.top && n.top->data[x][0][z].id == air_id) create_face(Face::Top);
+    } else if (chunk.data[x][y + 1][z].id == air_id) {
+        create_face(Face::Top);
+    }
 }
 
-std::vector<PackedFace> voxel::generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry) {
+std::vector<PackedFace> voxel::generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry, NeighboringChunks neighboring_chunks) {
     // Face instance data:
     // 00000000000000FFFYYYYYZZZZZXXXXX
     // F - face direction
@@ -62,7 +100,7 @@ std::vector<PackedFace> voxel::generate_mesh(RenderState& render_state, const vo
             continue;
         }
 
-        generate_visible_faces(packed_faces, x, y, z, chunk, air_id);
+        generate_visible_faces(packed_faces, x, y, z, chunk, neighboring_chunks, air_id);
     }
 
     return packed_faces;

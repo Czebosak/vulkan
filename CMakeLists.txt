@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION "3.19.2")
 option(PRODUCTION_BUILD "Build in production mode" OFF)
 
 project(VoxelGame)
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type")
@@ -16,10 +16,25 @@ find_package(glfw3 REQUIRED)
 find_package(fmt REQUIRED)
 
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/external/vkbootstrap/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/imgui*.cpp")
+#file(GLOB SIMDJSON_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/external/simdjson/simdjson.cpp")
 #if(NOT ENABLE_FEATURE_B)
 #    file(GLOB_RECURSE FEATURE_B_FILES CONFIGURE_DEPENDS src/featureB/*.cpp src/featureB/*.h)
 #    list(REMOVE_ITEM SRC_FILES ${FEATURE_B_FILES})
 #endif()
+
+set(WAMR_BUILD_PLATFORM "linux")
+set(WAMR_BUILD_TARGET "X86_64")
+set(WAMR_BUILD_INTERP 1)
+set(WAMR_BUILD_FAST_INTERP 1)
+set(WAMR_BUILD_AOT 1)
+set(WAMR_BUILD_LIBC_BUILTIN 1)
+set(WAMR_BUILD_LIBC_WASI 1)
+set(WAMR_BUILD_SIMD 1)
+set(WAMR_ROOT_DIR external/wamr)
+
+include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
+add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})
+#add_library(simdjson ${SIMDJSON_SOURCES})
 
 add_executable(VoxelGame "${MY_SOURCES}")
 
@@ -49,26 +64,35 @@ set(FASTNOISE2_TESTS     OFF CACHE BOOL "idk" FORCE)
 set(FASTNOISE2_UTILITY   OFF CACHE BOOL "idk" FORCE)
 
 add_subdirectory(external/fastnoise2)
+add_subdirectory(external/flecs)
 
 target_include_directories(VoxelGame PRIVATE "src")
 target_include_directories(VoxelGame PRIVATE "external/fastnoise2/include")
-target_include_directories(VoxelGame PRIVATE "external/vma/include")
+target_include_directories(VoxelGame SYSTEM PRIVATE "external/vma/include")
 target_include_directories(VoxelGame PRIVATE "external/vkbootstrap")
 target_include_directories(VoxelGame PRIVATE "external/imgui")
 target_include_directories(VoxelGame PRIVATE "external/imgui/backends")
 target_include_directories(VoxelGame PRIVATE "external/nlohmann_json/include")
-target_include_directories(VoxelGame PRIVATE "external/magic_enum/include")
+target_include_directories(VoxelGame SYSTEM PRIVATE "external/magic_enum/include")
+target_include_directories(VoxelGame SYSTEM PRIVATE "external/flecs/include")
 target_include_directories(VoxelGame PRIVATE "external/ctre")
+#target_include_directories(VoxelGame PRIVATE "external/simdjson")
 
 #if(USE_FEATURE_X)
     #add_definitions(-DFEATURE_X_ENABLED)
     #target_sources(myTarget PRIVATE feature_x.cpp)
 #else()
-target_link_libraries(VoxelGame PRIVATE glfw Vulkan::Vulkan fmt::fmt nlohmann_json::nlohmann_json FastNoise)
+
+target_link_libraries(VoxelGame PRIVATE glfw Vulkan::Vulkan fmt::fmt nlohmann_json::nlohmann_json FastNoise flecs::flecs_static vmlib)
+
+target_compile_options(flecs PRIVATE -w)
+#target_compile_options(simdjson PRIVATE -w)
 
 target_compile_options(VoxelGame PRIVATE -Wnrvo)
 
 #endif()
+
+#set_target_properties(flecs PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:flecs,INTERFACE_INCLUDE_DIRECTORIES>)
 
 if(PRODUCTION_BUILD)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)

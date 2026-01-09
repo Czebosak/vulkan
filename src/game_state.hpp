@@ -8,6 +8,8 @@
 #include <voxel/world_generator.hpp>
 #include <voxel/chunk_manager.hpp>
 
+#include <flecs.h>
+
 class GameState {
 public:
     Camera camera;
@@ -17,6 +19,8 @@ public:
     WorldGenerator world_generator;
 
     float yaw, pitch;
+
+    flecs::world world;
 
     GameState();
     ~GameState();

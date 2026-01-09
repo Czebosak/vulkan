@@ -59,9 +59,23 @@ namespace registry {
     Registry::Registry() {}
     Registry::~Registry() {}
 
-    Namespace& Registry::register_namespace(std::string name) {
+    Namespace* Registry::get_namespace(std::string_view name) {
+        auto it = namespaces.find(name);
+
+        if (it != namespaces.end()) {
+            return &it->second;
+        } else {
+            return nullptr;
+        }
+    }
+
+    Namespace* Registry::register_namespace(std::string name) {
         auto it = namespaces.emplace(std::make_pair(name, Namespace()));
-        return it.first->second;
+        if (it.second) {
+            return &it.first->second;
+        } else {
+            return nullptr;
+        }
     }
 
     void Registry::create() {
@@ -109,13 +123,13 @@ namespace registry {
 
         std::string namespace_name = get_json_value<std::string>(data, "name");
 
-        Namespace& ns = register_namespace(std::move(namespace_name));
+        Namespace* ns = register_namespace(std::move(namespace_name));
 
         json::array_t blocks_array = get_json_value<json::array_t>(data, "blocks");
 
         for (const auto& block_object : blocks_array) {
             if (block_object.is_object()) {
-                ns.register_block({
+                ns->register_block({
                     .name = get_json_value<std::string>(block_object, "name"),
                 });
             } else {

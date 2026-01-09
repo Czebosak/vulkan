@@ -33,5 +33,18 @@ void voxel::ChunkManager::update(glm::dvec3 player_position, int hrender_distanc
         chunks_to_load.pop();
 
         chunks.emplace(std::make_pair(chunk_pos, world_generator.generate_chunk(chunk_pos, registry)));
+        
+        // Mark all neighbors as dirty
+        auto mark_as_dirty_if_exists = [&](int x, int y, int z) {
+            auto it = chunks.find(glm::ivec3(x, y, z));
+            if (it != chunks.end()) it->second.mark_as_dirty();
+        };
+        
+        mark_as_dirty_if_exists(chunk_pos.x, chunk_pos.y + 1, chunk_pos.z);
+        mark_as_dirty_if_exists(chunk_pos.x, chunk_pos.y - 1, chunk_pos.z);
+        mark_as_dirty_if_exists(chunk_pos.x - 1, chunk_pos.y, chunk_pos.z);
+        mark_as_dirty_if_exists(chunk_pos.x + 1, chunk_pos.y, chunk_pos.z);
+        mark_as_dirty_if_exists(chunk_pos.x, chunk_pos.y, chunk_pos.z + 1);
+        mark_as_dirty_if_exists(chunk_pos.x, chunk_pos.y, chunk_pos.z - 1);
     }
 }

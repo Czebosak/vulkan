@@ -159,7 +159,7 @@ namespace voxel::renderer {
 
         size_t block_i = BLOCK_COUNT;
         int buf_i = 0;
-        for (buf_i; buf_i < buffers.size(); buf_i++) {
+        for (; buf_i < buffers.size(); buf_i++) {
             size_t temp_block_i = buffers[buf_i].allocate(needed_blocks);
             if (block_i != BLOCK_COUNT) {
                 block_i = temp_block_i;
@@ -247,7 +247,21 @@ namespace voxel::renderer {
         const auto& registry = registry::Registry::get();
         for (auto& [position, chunk] : chunk_manager.chunks) {
             if (chunk.is_dirty()) {
-                std::vector<PackedFace> faces = generate_mesh(render_state, chunk, registry);
+                auto get_neighboring = [&](int x, int y, int z) {
+                    auto it = chunk_manager.chunks.find(glm::ivec3(x, y, z));
+                    return it != chunk_manager.chunks.end() ? &it->second : nullptr;
+                };
+
+                NeighboringChunks neighboring = {
+                    .top    = get_neighboring(position.x, position.y + 1, position.z),
+                    .bottom = get_neighboring(position.x, position.y - 1, position.z),
+                    .left   = get_neighboring(position.x - 1, position.y, position.z),
+                    .right  = get_neighboring(position.x + 1, position.y, position.z),
+                    .front  = get_neighboring(position.x, position.y, position.z - 1),
+                    .back   = get_neighboring(position.x, position.y, position.z + 1),
+                };
+
+                std::vector<PackedFace> faces = generate_mesh(render_state, chunk, registry, neighboring);
 
                 if (faces.size() != 0) {
                     AllocInfo alloc_info = allocate_mesh(render_state, faces);

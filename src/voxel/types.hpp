@@ -50,5 +50,6 @@ namespace voxel {
         MeshState mesh_state;
 
         bool is_dirty();
+        void mark_as_dirty();
     };
 }
