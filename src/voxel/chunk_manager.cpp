@@ -6,7 +6,7 @@ inline int square(int n) {
     return n * n;
 }
 
-void voxel::ChunkManager::update(glm::dvec3 player_position, int hrender_distance, int vrender_distance, std::function<VkDeviceAddress(size_t)> allocation_function) {
+void voxel::ChunkManager::update(glm::dvec3 player_position, int hrender_distance, int vrender_distance) {
     glm::ivec3 player_chunk_pos = player_position / 16.0;
 
     int a = square(hrender_distance);
@@ -37,7 +37,7 @@ void voxel::ChunkManager::update(glm::dvec3 player_position, int hrender_distanc
         // Mark all neighbors as dirty
         auto mark_as_dirty_if_exists = [&](int x, int y, int z) {
             auto it = chunks.find(glm::ivec3(x, y, z));
-            if (it != chunks.end()) it->second.mark_as_dirty();
+            if (it != chunks.end()) it->second.mesh.state = MeshState::MarkedForCleanup;
         };
         
         mark_as_dirty_if_exists(chunk_pos.x, chunk_pos.y + 1, chunk_pos.z);

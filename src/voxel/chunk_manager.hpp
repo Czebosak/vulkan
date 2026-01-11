@@ -37,6 +37,6 @@ namespace voxel {
 
         friend renderer::VoxelRenderer;
     public:
-        void update(glm::dvec3 player_position, int hrender_distance, int vrender_distance, std::function<VkDeviceAddress(size_t)> allocation_function = nullptr);
+        void update(glm::dvec3 player_position, int hrender_distance, int vrender_distance);
     };
 }

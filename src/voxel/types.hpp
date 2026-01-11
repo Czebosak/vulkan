@@ -37,19 +37,26 @@ namespace voxel {
         MeshFace faces[6];
     }; */
 
+    enum class MeshState {
+        Ready,
+        Pending,
+        Dirty,
+        MarkedForCleanup,
+    };
+
     struct Mesh {
         VkDeviceAddress allocated_addr;
         uint32_t buffer_index;
         uint32_t face_count;
+        MeshState state;
     };
-
-    using MeshState = std::variant<Mesh, Dirty>;
 
     struct Chunk {
         std::array<std::array<std::array<Block, CHUNK_SIZE>, CHUNK_SIZE>, CHUNK_SIZE> data;
-        MeshState mesh_state;
+        Mesh mesh;
 
-        bool is_dirty();
+        bool is_dirty() const;
+        bool is_mesh_ready() const;
         void mark_as_dirty();
     };
 }

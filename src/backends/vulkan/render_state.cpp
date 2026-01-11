@@ -4,8 +4,23 @@
 
 RenderState::RenderState() {}
 
-RenderState::RenderState(Engine* engine, VkDevice device, uint32_t queue_family_index, VmaAllocator allocator, VkExtent2D draw_extent, VkFormat draw_image_format, VkFormat depth_image_format)
-    : engine(engine), device(device), queue_family_index(queue_family_index), allocator(allocator), draw_extent(draw_extent), draw_image_format(draw_image_format), depth_image_format(depth_image_format) {}
+RenderState::RenderState(
+    Engine* engine,
+    VkDevice device,
+    uint32_t queue_family_index,
+    VmaAllocator allocator,
+    VkExtent2D draw_extent,
+    VkFormat draw_image_format,
+    VkFormat depth_image_format,
+    resource::ResourceLoader& resource_loader
+) : engine(engine),
+    device(device),
+    queue_family_index(queue_family_index),
+    allocator(allocator),
+    draw_extent(draw_extent),
+    draw_image_format(draw_image_format),
+    depth_image_format(depth_image_format),
+    resource_loader(&resource_loader) {}
 
 void RenderState::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
     engine->immediate_submit(std::move(function));

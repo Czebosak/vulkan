@@ -9,10 +9,12 @@
 #include <glm/glm.hpp>
 
 #include <vector>
+#include <thread>
 
 #include <backends/vulkan/types.hpp>
 #include <backends/vulkan/descriptors.hpp>
 #include <backends/vulkan/allocated_buffer.hpp>
+#include <backends/vulkan/resource_loader.hpp>
 
 #include <voxel/mesh_generation.hpp>
 
@@ -114,6 +116,8 @@ private:
     GameState game_state;
     
     RenderState render_state;
+
+    resource::ResourceLoader resource_loader;
 
     friend RenderState;
 

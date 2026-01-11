@@ -16,10 +16,10 @@ namespace voxel::renderer {
         VkDeviceAddress face_buffer;
     };
 
-    struct AllocInfo {
+    /* struct AllocInfo {
         VkDeviceAddress allocated_addr;
         size_t buffer_index;
-    };
+    }; */
 
     class VoxelRenderer {
     private:
@@ -75,8 +75,10 @@ namespace voxel::renderer {
     public:
         void init(RenderState& render_state);
 
-        // Size required in bytes, returns pointer to the allocated memory
-        AllocInfo allocate_mesh(RenderState& render_state, std::span<PackedFace> data);
+        // Size required in bytes, updates the mesh state
+        void allocate_mesh(RenderState& render_state, std::span<PackedFace> data, Mesh& mesh);
+
+        void free_mesh(RenderState& render_state, const Mesh& mesh);
 
         VkCommandBuffer draw(RenderState& render_state, ChunkManager& chunk_manager, VkFormat color_attachment_format, VkFormat depth_attachment_format, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, const glm::mat4& camera_matrix);
 

@@ -174,6 +174,8 @@ uint32_t Engine::init_vulkan(GLFWwindow *window) {
     graphics_queue = vkb_device.get_queue(vkb::QueueType::graphics).value();
     graphics_queue_family = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
 
+    resource_loader.init(vkb_device);
+
     VmaAllocatorCreateInfo allocator_info = {
         .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
         .physicalDevice = physical_device,
@@ -790,7 +792,7 @@ uint32_t Engine::init() {
     init_sync_structures();
     init_descriptors();
 
-    render_state = {
+    render_state = RenderState(
         this,
         device,
         graphics_queue_family,
@@ -798,7 +800,9 @@ uint32_t Engine::init() {
         draw_extent,
         draw_image.image_format,
         depth_image.image_format,
-    };
+
+        resource_loader
+    );
 
     init_pipelines();
     init_imgui();

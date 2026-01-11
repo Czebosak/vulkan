@@ -1,9 +1,13 @@
 #include "types.hpp"
 
-bool voxel::Chunk::is_dirty() {
-    return std::holds_alternative<voxel::Dirty>(mesh_state);
+bool voxel::Chunk::is_dirty() const {
+    return mesh.state == MeshState::Dirty;
+}
+
+bool voxel::Chunk::is_mesh_ready() const {
+    return mesh.state == MeshState::Ready;
 }
 
 void voxel::Chunk::mark_as_dirty() {
-    mesh_state = Dirty {};
+    mesh.state = MeshState::Dirty;
 }

@@ -2,6 +2,8 @@
 
 #include <fmt/core.h>
 
+#include <iostream>
+
 #include <backends/vulkan/defines.hpp>
 #include <backends/vulkan/initializers.hpp>
 #include <backends/vulkan/pipeline_builder.hpp>
@@ -21,6 +23,8 @@ namespace voxel::renderer {
         buffer.addr = vkGetBufferDeviceAddress(render_state.device, &device_adress_info);
 
         buffer.blocks.set();
+
+        fmt::println("new buffer alllocated");
         return buffer;
     }
 
@@ -153,16 +157,15 @@ namespace voxel::renderer {
         buffers.emplace_back(Buffer::create(render_state));
     }
 
-    AllocInfo VoxelRenderer::allocate_mesh(RenderState& render_state, std::span<PackedFace> data) {
+    void VoxelRenderer::allocate_mesh(RenderState& render_state, std::span<PackedFace> data, Mesh& mesh) {
         size_t size = data.size_bytes();
         size_t needed_blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
         size_t block_i = BLOCK_COUNT;
         int buf_i = 0;
         for (; buf_i < buffers.size(); buf_i++) {
-            size_t temp_block_i = buffers[buf_i].allocate(needed_blocks);
+            block_i = buffers[buf_i].allocate(needed_blocks);
             if (block_i != BLOCK_COUNT) {
-                block_i = temp_block_i;
                 break;
             }
         }
@@ -174,20 +177,43 @@ namespace voxel::renderer {
 
         memcpy(buffer_staging_buffer.info.pMappedData, data.data(), size);
 
-        render_state.immediate_submit([&](VkCommandBuffer cmd) {
-            VkBufferCopy data_copy = {
-                .srcOffset = 0,
-                .dstOffset = block_i * BLOCK_SIZE,
-                .size = size,
-            };
-
-            vkCmdCopyBuffer(cmd, buffer_staging_buffer.buffer, buffers[buf_i].get_buffer_handle(), 1, &data_copy);
-        });
-
-        return AllocInfo {
+        mesh = Mesh {
             .allocated_addr = buffers[buf_i].get_buffer_addr() + block_i * BLOCK_SIZE,
-            .buffer_index = static_cast<size_t>(buf_i),
+            .buffer_index = static_cast<uint32_t>(buf_i),
+            .face_count = static_cast<uint32_t>(data.size()),
+            .state = MeshState::Pending,
         };
+
+        render_state.resource_loader->add_job(resource::Job {
+            .func = [block_i, size, buf_i, staging_buffer = buffer_staging_buffer.buffer, buffers = &this->buffers, mesh_state_ptr = &mesh.state](VkCommandBuffer cmd) {
+                if (*mesh_state_ptr != MeshState::Pending) {
+                    return false;
+                }
+
+                VkBufferCopy data_copy = {
+                    .srcOffset = 0,
+                    .dstOffset = block_i * BLOCK_SIZE,
+                    .size = size,
+                };
+
+                vkCmdCopyBuffer(cmd, staging_buffer, (*buffers)[buf_i].get_buffer_handle(), 1, &data_copy);
+                
+                return true;
+            },
+            .callback = [mesh_state_ptr = &mesh.state]() {
+                if (*mesh_state_ptr == MeshState::Pending) {
+                    *mesh_state_ptr = MeshState::Ready;
+                }
+            }
+        });
+    }
+
+    void VoxelRenderer::free_mesh(RenderState& render_state, const Mesh& mesh) {
+        Buffer& buf = buffers[mesh.buffer_index];
+
+        size_t block_idx = (mesh.allocated_addr - buf.get_buffer_addr()) / BLOCK_SIZE;
+
+        buf.free(block_idx, mesh.face_count * sizeof(PackedFace));
     }
 
     VkCommandBuffer VoxelRenderer::draw(RenderState& render_state, ChunkManager& chunk_manager, VkFormat color_attachment_format, VkFormat depth_attachment_format, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, const glm::mat4& camera_matrix) {
@@ -246,6 +272,12 @@ namespace voxel::renderer {
 
         const auto& registry = registry::Registry::get();
         for (auto& [position, chunk] : chunk_manager.chunks) {
+            if (chunk.mesh.state == MeshState::MarkedForCleanup) {
+                free_mesh(render_state, chunk.mesh);
+
+                chunk.mesh.state = MeshState::Dirty;
+            }
+
             if (chunk.is_dirty()) {
                 auto get_neighboring = [&](int x, int y, int z) {
                     auto it = chunk_manager.chunks.find(glm::ivec3(x, y, z));
@@ -264,29 +296,25 @@ namespace voxel::renderer {
                 std::vector<PackedFace> faces = generate_mesh(render_state, chunk, registry, neighboring);
 
                 if (faces.size() != 0) {
-                    AllocInfo alloc_info = allocate_mesh(render_state, faces);
-
-                    chunk.mesh_state = Mesh {
-                        .allocated_addr = alloc_info.allocated_addr,
-                        .buffer_index = static_cast<uint32_t>(alloc_info.buffer_index),
-                        .face_count = static_cast<uint32_t>(faces.size()),
-                    };
+                    allocate_mesh(render_state, faces, chunk.mesh);
                 } else {
-                    chunk.mesh_state = {};
+                    chunk.mesh.state = MeshState::Ready;
                 }
             }
 
-            const Mesh& mesh = std::get<Mesh>(chunk.mesh_state);
+            if (!chunk.is_mesh_ready()) {
+                continue;
+            }
 
-            if (mesh.face_count == 0) {
+            if (chunk.mesh.face_count == 0) {
                 continue;
             }
 
             push_constants.mvp = camera_matrix * glm::translate(glm::mat4(1.0f), glm::vec3(position * 16));
-            push_constants.face_buffer = mesh.allocated_addr;
+            push_constants.face_buffer = chunk.mesh.allocated_addr;
             vkCmdPushConstants(render_cmd_buffer, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VoxelPushConstants), &push_constants);
 
-            vkCmdDraw(render_cmd_buffer, 4, mesh.face_count, 0, 0);
+            vkCmdDraw(render_cmd_buffer, 4, chunk.mesh.face_count, 0, 0);
         }
 
         vkCmdEndRendering(render_cmd_buffer);
