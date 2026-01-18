@@ -14,5 +14,3 @@ struct Velocity {
 };
 
 struct Entity {};
-
-struct Player {};

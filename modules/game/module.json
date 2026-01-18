@@ -1,0 +1,7 @@
+{
+    "name": "game",
+    "display_name": "Game",
+    "type": "native",
+    "entry_symbol": "game_init",
+    "dependencies": ["wow"]
+}

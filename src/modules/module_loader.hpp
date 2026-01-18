@@ -11,7 +11,7 @@
 
 #include <registry.hpp>
 
-class Engine;
+class GameState;
 
 class ModuleLoader {
 public:
@@ -26,7 +26,7 @@ private:
 
     static std::vector<Module> modules;
 
-    friend Engine;
+    friend GameState;
 
     static std::optional<ParseError> parse_definitions(nlohmann::json j, registry::Registry& registry);
 

@@ -9,6 +9,8 @@ using namespace input;
 
 #include <components/components.hpp>
 
+#include <modules/module_loader.hpp>
+
 GameState::GameState() {
     yaw = 0.0f;
     pitch = 0.0f;
@@ -20,12 +22,15 @@ GameState::GameState() {
 
     registry.lock();
 
-    world.entity()
+    /* world.entity()
         .add<Entity>()
         .set<Transform>({ glm::dvec3(0.0), glm::quat(), glm::vec3(0.0f) })
         .set<Velocity>({ glm::vec3(0.0f) })
-        .add<Player>();
-    
+        .add<Player>(); */
+
+    std::string_view dirs[] = {"modules"};
+    ModuleLoader::load_modules(dirs);
+
     //world_generator = WorldGenerator();
 
     //chunk = world_generator.generate_chunk(glm::ivec3(0, 0, 0), registry);
@@ -81,4 +86,6 @@ void GameState::main_loop(const Input& input, float delta) {
 
     glm::vec3 movement = (dir.x * forward + dir.z * right); //* 20.0f;
     camera.position += movement * speed * delta;
+
+    world.progress();
 }

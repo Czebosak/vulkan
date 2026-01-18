@@ -5,6 +5,7 @@ option(PRODUCTION_BUILD "Build in production mode" OFF)
 project(VoxelGame)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--export-dynamic")
 
 #set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type")
 
@@ -65,6 +66,7 @@ set(FASTNOISE2_UTILITY   OFF CACHE BOOL "idk" FORCE)
 
 add_subdirectory(external/fastnoise2)
 add_subdirectory(external/flecs)
+add_subdirectory(external/dylib)
 
 target_include_directories(VoxelGame PRIVATE "src")
 target_include_directories(VoxelGame SYSTEM PRIVATE "external/fastnoise2/include")
@@ -77,6 +79,7 @@ target_include_directories(VoxelGame SYSTEM PRIVATE "external/magic_enum/include
 target_include_directories(VoxelGame SYSTEM PRIVATE "external/flecs/include")
 target_include_directories(VoxelGame SYSTEM PRIVATE "external/ctre")
 target_include_directories(VoxelGame SYSTEM PRIVATE "external/concurrentqueue")
+target_include_directories(VoxelGame SYSTEM PRIVATE "external/dylib/include")
 #target_include_directories(VoxelGame PRIVATE "external/simdjson")
 
 #if(USE_FEATURE_X)
@@ -84,7 +87,7 @@ target_include_directories(VoxelGame SYSTEM PRIVATE "external/concurrentqueue")
     #target_sources(myTarget PRIVATE feature_x.cpp)
 #else()
 
-target_link_libraries(VoxelGame PRIVATE glfw Vulkan::Vulkan fmt::fmt nlohmann_json::nlohmann_json FastNoise flecs::flecs_static vmlib)
+target_link_libraries(VoxelGame PRIVATE glfw Vulkan::Vulkan fmt::fmt nlohmann_json::nlohmann_json FastNoise flecs::flecs_static vmlib dylib)
 
 target_compile_options(flecs PRIVATE -w)
 #target_compile_options(simdjson PRIVATE -w)

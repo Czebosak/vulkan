@@ -1,7 +1,10 @@
 #include "module_loader.hpp"
 
+#include <fstream>
 #include <filesystem>
 #include <expected>
+
+#include <dylib.hpp>
 
 using namespace nlohmann;
 using namespace registry;
@@ -9,6 +12,7 @@ using namespace registry;
 namespace fs = std::filesystem;
 
 constexpr std::string_view MODULE_DEFINITION_FILENAME = "module.json";
+constexpr std::string_view MODULE_BINARY_FILENAME = "module";
 
 std::vector<Module> ModuleLoader::modules;
 
@@ -34,8 +38,7 @@ std::expected<T, ModuleLoader::ParseError> get_json_value(const json& j, const s
         if (is_json_typez<T>(value)) {
             data = value;
         } else {
-            fmt::println("failed bro");
-            exit(-1);
+            return std::unexpected(ModuleLoader::ParseError::UnexpectedType);
         }
     } else {
         return std::unexpected(ModuleLoader::ParseError::KeyMissing);
@@ -57,7 +60,22 @@ std::optional<ModuleLoader::ParseError> ModuleLoader::parse_definitions(json j, 
 std::optional<Module> ModuleLoader::load_module(std::string_view path) {
     Module module;
 
-    json config = json::parse(std::string(path) + MODULE_DEFINITION_FILENAME);
+    fmt::println("{}", std::format("{}/{}", path, MODULE_DEFINITION_FILENAME));
+    std::ifstream f(std::format("{}/{}", path, MODULE_DEFINITION_FILENAME));
+    json config = json::parse(f);
+
+    auto type = get_json_value<std::string>(config, "type");
+    if (!type) return std::nullopt;
+
+    if (*type == "native") {
+        auto entry_symbol = get_json_value<std::string>(config, "entry_symbol");
+        if (!entry_symbol) return std::nullopt;
+
+        dylib::library module_lib(std::format("{}/{}", path, MODULE_BINARY_FILENAME), dylib::decorations::os_default());
+
+        bool success = module_lib.get_function<bool()>(*entry_symbol)();
+        fmt::println("{}", success);
+    }
 
     auto& registry = Registry::get_mut();
 
