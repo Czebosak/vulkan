@@ -28,8 +28,8 @@ GameState::GameState() {
         .set<Velocity>({ glm::vec3(0.0f) })
         .add<Player>(); */
 
-    std::string_view dirs[] = {"modules"};
-    ModuleLoader::load_modules(dirs);
+    /* std::string_view dirs[] = {"modules"};
+    ModuleLoader::load_modules(dirs); */
 
     //world_generator = WorldGenerator();
 

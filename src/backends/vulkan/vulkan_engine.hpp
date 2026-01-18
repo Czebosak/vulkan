@@ -40,8 +40,6 @@ struct ComputePushConstants {
     glm::vec4 data4;
 };
 
-inline PFN_vkSetDebugUtilsObjectNameEXT fuck_vkSetDebugUtilsObjectNameEXT;
-
 class RenderState;
 
 class Engine {

@@ -1,4 +1,5 @@
 #pragma once
+#include "backends/vulkan/allocated_buffer.hpp"
 #include <vulkan/vulkan.h>
 
 #include <glm/glm.hpp>
@@ -42,10 +43,10 @@ namespace voxel::renderer {
 
             AllocatedBuffer gpu_buffer;
             VkDeviceAddress addr;
-
-            Buffer();
         public:
-            static Buffer create(RenderState& render_state);
+            static Buffer create(RenderState& render_state, bool cpu_only = false);
+
+            static inline size_t calculate_needed_blocks(size_t bytes);
 
             // if allocation fails return BLOCK_COUNT
             size_t allocate(size_t n);
@@ -55,6 +56,8 @@ namespace voxel::renderer {
             void destroy(RenderState& render_state);
 
             inline VkBuffer get_buffer_handle();
+
+            inline AllocatedBuffer& get_allocated_buffer();
 
             inline VkDeviceAddress get_buffer_addr();
 
@@ -69,7 +72,7 @@ namespace voxel::renderer {
         VkPipeline voxel_pipeline;
         VkPipelineLayout voxel_pipeline_layout;
 
-        AllocatedBuffer buffer_staging_buffer;
+        Buffer staging_buffer;
 
         std::vector<Buffer> buffers;
     public:

@@ -22,6 +22,7 @@
 #include <thread>
 #include <ranges>
 
+#include <backends/vulkan/vulkan_function_pointers.hpp>
 #include <backends/vulkan/initializers.hpp>
 #include <backends/vulkan/images.hpp>
 #include <backends/vulkan/pipeline_builder.hpp>
@@ -136,7 +137,7 @@ uint32_t Engine::init_vulkan(GLFWwindow *window) {
     debug_messenger = vkb_inst.debug_messenger;
 
     #ifndef NDEBUG
-    fuck_vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
+    pVkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
     #endif
     
     if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) return -6;
@@ -503,7 +504,7 @@ void Engine::init_imgui() {
         .objectHandle = (uint64_t)imgui_pool,
         .pObjectName = "imgui descriptor pool",
     };
-    fuck_vkSetDebugUtilsObjectNameEXT(device, &name_info);
+    pVkSetDebugUtilsObjectNameEXT(device, &name_info);
     #endif
 
     // 2: initialize imgui library

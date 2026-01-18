@@ -1,4 +1,6 @@
 #include "voxel_renderer.hpp"
+#include "backends/vulkan/allocated_buffer.hpp"
+#include "voxel/render_types.hpp"
 
 #include <fmt/core.h>
 
@@ -13,18 +15,27 @@
 #include <voxel/mesh_generation.hpp>
 
 namespace voxel::renderer {
-    VoxelRenderer::Buffer::Buffer() {}
-
-    VoxelRenderer::Buffer VoxelRenderer::Buffer::create(RenderState& render_state) {
+    VoxelRenderer::Buffer VoxelRenderer::Buffer::create(RenderState& render_state, bool cpu_only) {
         VoxelRenderer::Buffer buffer;
-        buffer.gpu_buffer = AllocatedBuffer::create(render_state, TOTAL_BUFFER_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+        VkBufferUsageFlags usage;
+        VmaMemoryUsage memory_usage;
+        if (!cpu_only) {
+            usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+            memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        } else {
+            usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+            memory_usage = VMA_MEMORY_USAGE_CPU_ONLY;
+        }
+        buffer.gpu_buffer = AllocatedBuffer::create(render_state, TOTAL_BUFFER_SIZE, usage, memory_usage);
 
-        VkBufferDeviceAddressInfo device_adress_info = { .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer.gpu_buffer.buffer };
-        buffer.addr = vkGetBufferDeviceAddress(render_state.device, &device_adress_info);
+        if (!cpu_only) {
+            VkBufferDeviceAddressInfo device_adress_info = { .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = buffer.gpu_buffer.buffer };
+            buffer.addr = vkGetBufferDeviceAddress(render_state.device, &device_adress_info);
+        }
 
         buffer.blocks.set();
 
-        fmt::println("new buffer alllocated");
+        //fmt::println("new buffer alllocated");
         return buffer;
     }
 
@@ -40,6 +51,10 @@ namespace voxel::renderer {
             contig_i++;
         }
         return { false, contig_i };
+    }
+
+    inline size_t VoxelRenderer::Buffer::calculate_needed_blocks(size_t bytes) {
+        return (bytes + BLOCK_SIZE - 1) / BLOCK_SIZE;
     }
 
     size_t VoxelRenderer::Buffer::allocate(size_t n) {
@@ -72,6 +87,10 @@ namespace voxel::renderer {
 
     inline VkBuffer VoxelRenderer::Buffer::get_buffer_handle() {
         return gpu_buffer.buffer;
+    }
+
+    inline AllocatedBuffer& VoxelRenderer::Buffer::get_allocated_buffer() {
+        return gpu_buffer;
     }
 
     inline VkDeviceAddress VoxelRenderer::Buffer::get_buffer_addr() {
@@ -152,14 +171,14 @@ namespace voxel::renderer {
         vkDestroyShaderModule(render_state.device, voxel_frag_shader, nullptr);
         vkDestroyShaderModule(render_state.device, voxel_vertex_shader, nullptr);
 
-        buffer_staging_buffer = AllocatedBuffer::create(render_state, TOTAL_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+        staging_buffer = Buffer::create(render_state, true);
 
         buffers.emplace_back(Buffer::create(render_state));
     }
 
     void VoxelRenderer::allocate_mesh(RenderState& render_state, std::span<PackedFace> data, Mesh& mesh) {
         size_t size = data.size_bytes();
-        size_t needed_blocks = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        size_t needed_blocks = Buffer::calculate_needed_blocks(size);
 
         size_t block_i = BLOCK_COUNT;
         int buf_i = 0;
@@ -175,7 +194,9 @@ namespace voxel::renderer {
             block_i = buffers.emplace_back(Buffer::create(render_state)).allocate(needed_blocks);
         }
 
-        memcpy(buffer_staging_buffer.info.pMappedData, data.data(), size);
+        size_t staging_block_i = staging_buffer.allocate(needed_blocks);
+
+        memcpy((uint8_t*)staging_buffer.get_allocated_buffer().info.pMappedData + (staging_block_i * BLOCK_SIZE), data.data(), size);
 
         mesh = Mesh {
             .allocated_addr = buffers[buf_i].get_buffer_addr() + block_i * BLOCK_SIZE,
@@ -185,13 +206,13 @@ namespace voxel::renderer {
         };
 
         render_state.resource_loader->add_job(resource::Job {
-            .func = [block_i, size, buf_i, staging_buffer = buffer_staging_buffer.buffer, buffers = &this->buffers, mesh_state_ptr = &mesh.state](VkCommandBuffer cmd) {
+            .func = [block_i, staging_block_i, size, buf_i, staging_buffer = staging_buffer.get_buffer_handle(), buffers = &this->buffers, mesh_state_ptr = &mesh.state](VkCommandBuffer cmd) {
                 if (*mesh_state_ptr != MeshState::Pending) {
                     return false;
                 }
 
                 VkBufferCopy data_copy = {
-                    .srcOffset = 0,
+                    .srcOffset = staging_block_i * BLOCK_SIZE,
                     .dstOffset = block_i * BLOCK_SIZE,
                     .size = size,
                 };
@@ -200,7 +221,9 @@ namespace voxel::renderer {
                 
                 return true;
             },
-            .callback = [mesh_state_ptr = &mesh.state]() {
+            .callback = [mesh_state_ptr = &mesh.state, staging_buffer_ptr = &staging_buffer, staging_block_i, needed_blocks]() {
+                staging_buffer_ptr->free(staging_block_i * BLOCK_SIZE, needed_blocks);
+
                 if (*mesh_state_ptr == MeshState::Pending) {
                     *mesh_state_ptr = MeshState::Ready;
                 }
@@ -329,7 +352,7 @@ namespace voxel::renderer {
             buf.destroy(render_state);
         }
 
-        buffer_staging_buffer.destroy(render_state.allocator);
+        staging_buffer.destroy(render_state);
 
         vkDestroyPipelineLayout(render_state.device, voxel_pipeline_layout, nullptr);
         vkDestroyPipeline(render_state.device, voxel_pipeline, nullptr);
