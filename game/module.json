@@ -1,7 +1,0 @@
-{
-    "name": "game",
-    "display_name": "Game",
-    "type": "native",
-    "binary_path": "game",
-    "dependencies": ["wow"]
-}
