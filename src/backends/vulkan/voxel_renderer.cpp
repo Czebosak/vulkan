@@ -75,6 +75,7 @@ namespace voxel::renderer {
         return BLOCK_COUNT;
     }
 
+    // In blocks
     void VoxelRenderer::Buffer::free(size_t i, size_t length) {
         for (size_t bit_i = i; bit_i < (i + length); bit_i++) {
             blocks[bit_i] = 1;
@@ -222,7 +223,7 @@ namespace voxel::renderer {
                 return true;
             },
             .callback = [mesh_state_ptr = &mesh.state, staging_buffer_ptr = &staging_buffer, staging_block_i, needed_blocks]() {
-                staging_buffer_ptr->free(staging_block_i * BLOCK_SIZE, needed_blocks);
+                staging_buffer_ptr->free(staging_block_i, needed_blocks);
 
                 if (*mesh_state_ptr == MeshState::Pending) {
                     *mesh_state_ptr = MeshState::Ready;
