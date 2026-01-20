@@ -1,4 +1,5 @@
 #include "initializers.hpp"
+#include <vulkan/vulkan_core.h>
 
 namespace vkinit {
     VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags) {
@@ -144,7 +145,7 @@ namespace vkinit {
         return render_info;
     }
 
-    VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usage_flags, VkExtent3D extent) {
+    VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usage_flags, VkExtent3D extent, VkImageType type) {
         VkImageCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .pNext = nullptr,

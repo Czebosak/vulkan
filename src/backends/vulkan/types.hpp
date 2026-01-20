@@ -33,14 +33,6 @@ struct SwapchainImage {
     VkSemaphore submit_semaphore;
 };
 
-struct AllocatedImage {
-    VkImage image;
-    VkImageView image_view;
-    VmaAllocation allocation;
-    VkExtent3D image_extent;
-    VkFormat image_format;
-};
-
 struct Vertex {
     glm::vec3 position;
     float _pad0;

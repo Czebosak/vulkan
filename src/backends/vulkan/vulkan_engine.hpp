@@ -14,6 +14,7 @@
 #include <backends/vulkan/types.hpp>
 #include <backends/vulkan/descriptors.hpp>
 #include <backends/vulkan/allocated_buffer.hpp>
+#include <backends/vulkan/allocated_image.hpp>
 #include <backends/vulkan/resource_loader.hpp>
 
 #include <voxel/mesh_generation.hpp>

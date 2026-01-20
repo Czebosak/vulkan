@@ -14,7 +14,7 @@ public:
     VmaAllocation allocation;
     VmaAllocationInfo info;
 
-    static AllocatedBuffer create(RenderState& render_state, size_t alloc_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);
+    [[nodiscard]] static AllocatedBuffer create(RenderState& render_state, size_t alloc_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);
 
     void destroy(VmaAllocator allocator);
 };
