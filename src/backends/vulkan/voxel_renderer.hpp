@@ -1,5 +1,4 @@
 #pragma once
-#include "backends/vulkan/allocated_buffer.hpp"
 #include <vulkan/vulkan.h>
 
 #include <glm/glm.hpp>
@@ -7,9 +6,13 @@
 #include <bitset>
 
 #include <backends/vulkan/render_state.hpp>
+#include <backends/vulkan/allocated_buffer.hpp>
+#include <backends/vulkan/allocated_image.hpp>
+#include <backends/vulkan/descriptors.hpp>
 
 #include <voxel/chunk_manager.hpp>
 #include <voxel/render_types.hpp>
+#include <vulkan/vulkan_core.h>
 
 namespace voxel::renderer {
     struct VoxelPushConstants {
@@ -71,6 +74,13 @@ namespace voxel::renderer {
 
         VkPipeline voxel_pipeline;
         VkPipelineLayout voxel_pipeline_layout;
+
+        DescriptorAllocatorGrowable descriptor_allocator;
+
+        AllocatedImage error_image;
+
+        VkDescriptorSetLayout texture_descriptor_layout;
+        VkSampler texture_sampler;
 
         Buffer staging_buffer;
 

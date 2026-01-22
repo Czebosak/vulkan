@@ -1,14 +1,14 @@
 #include "voxel_renderer.hpp"
 #include "backends/vulkan/allocated_buffer.hpp"
+#include "backends/vulkan/allocated_image.hpp"
 #include "voxel/render_types.hpp"
 
 #include <fmt/core.h>
 
-#include <iostream>
-
 #include <backends/vulkan/defines.hpp>
 #include <backends/vulkan/initializers.hpp>
 #include <backends/vulkan/pipeline_builder.hpp>
+#include <backends/vulkan/descriptors.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -124,6 +124,15 @@ namespace voxel::renderer {
 
         VK_CHECK(vkAllocateCommandBuffers(render_state.device, &cmd_alloc_info, &render_cmd_buffer));
 
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> ratios = { 
+			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
+		};
+
+        descriptor_allocator.init(render_state.device, 1000, ratios);
+
         VkShaderModule voxel_frag_shader;
         auto voxel_frag_shader_opt = vkutil::load_shader_module(render_state.device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/voxel.frag.spv");
         if (voxel_frag_shader_opt) {
@@ -142,8 +151,21 @@ namespace voxel::renderer {
         else {
             fmt::println("Error when building the voxel vertex shader module");
         }
+
+        // Textures
+        VkSamplerCreateInfo sampler_info = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_NEAREST,
+            .minFilter = VK_FILTER_NEAREST,
+        };
+
+        vkCreateSampler(render_state.device, &sampler_info, nullptr, &texture_sampler);
+
+        texture_descriptor_layout = DescriptorLayoutBuilder()
+            .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+            .build(render_state.device, VK_SHADER_STAGE_FRAGMENT_BIT);
         
-        VkPushConstantRange bufferRange = {
+        VkPushConstantRange buffer_range = {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,
             .size = sizeof(voxel::VoxelPushConstants),
@@ -151,8 +173,10 @@ namespace voxel::renderer {
 
         VkPipelineLayoutCreateInfo pipeline_layout_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts = &texture_descriptor_layout,
             .pushConstantRangeCount = 1,
-            .pPushConstantRanges = &bufferRange,
+            .pPushConstantRanges = &buffer_range,
         };
 
         VK_CHECK(vkCreatePipelineLayout(render_state.device, &pipeline_layout_info, nullptr, &voxel_pipeline_layout));
@@ -175,6 +199,18 @@ namespace voxel::renderer {
         staging_buffer = Buffer::create(render_state, true);
 
         buffers.emplace_back(Buffer::create(render_state));
+
+        // Create checkerboard error texture
+        uint32_t black = glm::packUnorm4x8(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+        uint32_t magenta = glm::packUnorm4x8(glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+
+        std::array<uint32_t, 16 * 16> pixels;
+        for (int x = 0; x < 16; x++) {
+            for (int y = 0; y < 16; y++) {
+                pixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+            }
+        }
+        error_image = AllocatedImage::create(render_state, pixels.data(), VkExtent3D {16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
     }
 
     void VoxelRenderer::allocate_mesh(RenderState& render_state, std::span<PackedFace> data, Mesh& mesh) {
@@ -243,6 +279,8 @@ namespace voxel::renderer {
     VkCommandBuffer VoxelRenderer::draw(RenderState& render_state, ChunkManager& chunk_manager, VkFormat color_attachment_format, VkFormat depth_attachment_format, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, const glm::mat4& camera_matrix) {
         VK_CHECK(vkResetCommandBuffer(render_cmd_buffer, 0));
 
+        descriptor_allocator.clear_pools(render_state.device);
+
         VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
             .pNext = NULL,
@@ -294,6 +332,16 @@ namespace voxel::renderer {
 
         VoxelPushConstants push_constants;
 
+        VkDescriptorSet image_set = descriptor_allocator.allocate(render_state.device, texture_descriptor_layout);
+        {
+            DescriptorWriter writer;
+            writer.write_image(0, error_image.image_view, texture_sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+            writer.update_set(render_state.device, image_set);
+        }
+
+        vkCmdBindDescriptorSets(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline_layout, 0, 1, &image_set, 0, nullptr);
+
         const auto& registry = registry::Registry::get();
         for (auto& [position, chunk] : chunk_manager.chunks) {
             if (chunk.mesh.state == MeshState::MarkedForCleanup) {
@@ -317,7 +365,7 @@ namespace voxel::renderer {
                     .back   = get_neighboring(position.x, position.y, position.z + 1),
                 };
 
-                std::vector<PackedFace> faces = generate_mesh(render_state, chunk, registry, neighboring);
+                auto [faces, block] = generate_mesh(render_state, chunk, registry, neighboring);
 
                 if (faces.size() != 0) {
                     allocate_mesh(render_state, faces, chunk.mesh);
@@ -349,6 +397,12 @@ namespace voxel::renderer {
     }
 
     void VoxelRenderer::destroy(RenderState& render_state) {
+        vkDestroySampler(render_state.device, texture_sampler, nullptr);
+
+        error_image.destroy(render_state);
+
+        descriptor_allocator.destroy_pools(render_state.device);
+
         for (Buffer& buf : buffers) {
             buf.destroy(render_state);
         }

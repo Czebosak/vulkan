@@ -54,8 +54,8 @@ AllocatedImage AllocatedImage::create(RenderState& render_state, void* data, VkE
     AllocatedImage new_image = AllocatedImage::create(render_state, size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
 
     render_state.resource_loader->add_job(resource::Job {
-        .func = [&](VkCommandBuffer cmd) {
-            vkutil::transition_image(cmd, new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        .func = [staging_buf = staging_buffer.buffer, img = new_image.image, size](VkCommandBuffer cmd) {
+            vkutil::transition_image(cmd, img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
             VkBufferImageCopy copy_region = {
                 .bufferOffset = 0,
@@ -71,15 +71,16 @@ AllocatedImage AllocatedImage::create(RenderState& render_state, void* data, VkE
             };
 
             // copy the buffer into the image
-            vkCmdCopyBufferToImage(cmd, staging_buffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+            vkCmdCopyBufferToImage(cmd, staging_buf, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-            vkutil::transition_image(cmd, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            vkutil::transition_image(cmd, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
             return true;
+        },
+        .callback = [allocator = render_state.allocator, staging_buffer]() mutable {
+            staging_buffer.destroy(allocator);
         }
     });
-
-    staging_buffer.destroy(render_state.allocator);
 
     return new_image;
 }

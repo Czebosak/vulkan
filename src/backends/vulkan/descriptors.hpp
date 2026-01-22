@@ -32,14 +32,14 @@ struct DescriptorAllocator {
 };
 
 class DescriptorAllocatorGrowable {
-private:
+public:
     struct PoolSizeRatio {
         VkDescriptorType type;
         float ratio;
     };
-
+private:
     VkDescriptorPool get_pool(VkDevice device);
-    VkDescriptorPool create_pool(VkDevice device, uint32_t setCount, std::span<PoolSizeRatio> poolRatios);
+    VkDescriptorPool create_pool(VkDevice device, uint32_t set_count, std::span<PoolSizeRatio> pool_ratios);
 
     std::vector<PoolSizeRatio> ratios;
     std::vector<VkDescriptorPool> full_pools;

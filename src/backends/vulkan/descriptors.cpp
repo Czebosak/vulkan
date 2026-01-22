@@ -76,43 +76,40 @@ VkDescriptorSet DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLa
     return ds;
 }
 
-void DescriptorAllocatorGrowable::init(VkDevice device, uint32_t maxSets, std::span<PoolSizeRatio> poolRatios)
-{
+void DescriptorAllocatorGrowable::init(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_ratios) {
     ratios.clear();
     
-    for (auto r : poolRatios) {
+    for (auto r : pool_ratios) {
         ratios.push_back(r);
     }
 	
-    VkDescriptorPool newPool = create_pool(device, maxSets, poolRatios);
+    VkDescriptorPool new_pool = create_pool(device, max_sets, pool_ratios);
 
-    setsPerPool = maxSets * 1.5; //grow it next allocation
+    sets_per_pool = max_sets * 1.5; // grow it next allocation
 
-    readyPools.push_back(newPool);
+    ready_pools.push_back(new_pool);
 }
 
-void DescriptorAllocatorGrowable::clear_pools(VkDevice device)
-{ 
-    for (auto p : readyPools) {
+void DescriptorAllocatorGrowable::clear_pools(VkDevice device) {
+    for (auto p : ready_pools) {
         vkResetDescriptorPool(device, p, 0);
     }
-    for (auto p : fullPools) {
+    for (auto p : full_pools) {
         vkResetDescriptorPool(device, p, 0);
-        readyPools.push_back(p);
+        ready_pools.push_back(p);
     }
-    fullPools.clear();
+    full_pools.clear();
 }
 
-void DescriptorAllocatorGrowable::destroy_pools(VkDevice device)
-{
-	for (auto p : readyPools) {
+void DescriptorAllocatorGrowable::destroy_pools(VkDevice device) {
+	for (auto p : ready_pools) {
 		vkDestroyDescriptorPool(device, p, nullptr);
 	}
-    readyPools.clear();
-	for (auto p : fullPools) {
+    ready_pools.clear();
+	for (auto p : full_pools) {
 		vkDestroyDescriptorPool(device,p,nullptr);
     }
-    fullPools.clear();
+    full_pools.clear();
 }
 
 VkDescriptorPool DescriptorAllocatorGrowable::get_pool(VkDevice device) {
@@ -156,6 +153,35 @@ VkDescriptorPool DescriptorAllocatorGrowable::create_pool(VkDevice device, uint3
     return new_pool;
 }
 
+VkDescriptorSet DescriptorAllocatorGrowable::allocate(VkDevice device, VkDescriptorSetLayout layout, void* pNext) {
+    VkDescriptorPool pool_to_use = get_pool(device);
+
+	VkDescriptorSetAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext = pNext,
+        .descriptorPool = pool_to_use,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &layout,
+    };
+
+	VkDescriptorSet ds;
+	VkResult result = vkAllocateDescriptorSets(device, &alloc_info, &ds);
+
+    // allocation failed. Try again
+    if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
+
+        full_pools.push_back(pool_to_use);
+    
+        pool_to_use = get_pool(device);
+        alloc_info.descriptorPool = pool_to_use;
+
+       VK_CHECK( vkAllocateDescriptorSets(device, &alloc_info, &ds));
+    }
+  
+    ready_pools.push_back(pool_to_use);
+    return ds;
+}
+
 void DescriptorWriter::write_buffer(uint32_t binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
 	VkDescriptorBufferInfo& info = buffer_infos.emplace_back(VkDescriptorBufferInfo {
 		.buffer = buffer,
@@ -165,8 +191,8 @@ void DescriptorWriter::write_buffer(uint32_t binding, VkBuffer buffer, size_t si
 
 	VkWriteDescriptorSet write = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-	    .dstBinding = binding,
 	    .dstSet = VK_NULL_HANDLE,
+	    .dstBinding = binding,
 	    .descriptorCount = 1,
 	    .descriptorType = type,
 	    .pBufferInfo = &info,
@@ -184,8 +210,8 @@ void DescriptorWriter::write_image(uint32_t binding, VkImageView image, VkSample
 
 	VkWriteDescriptorSet write = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-	    .dstBinding = binding,
 	    .dstSet = VK_NULL_HANDLE,
+	    .dstBinding = binding,
 	    .descriptorCount = 1,
 	    .descriptorType = type,
 	    .pImageInfo = &info,
