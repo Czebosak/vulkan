@@ -31,11 +31,11 @@ namespace input {
     bool Input::is_key(Key key, KeyState state, bool should_be_just_updated) const {
         auto it = keyboard_state.find(key);
         if (it != keyboard_state.end()) {
-            if (should_be_just_updated == false) {
+            if (!should_be_just_updated) {
                 return state == it->second;
             } else {
                 auto it_updated = just_updated_keys.find(key);
-                return it_updated != just_updated_keys.end();
+                return state == it->second && it_updated != just_updated_keys.end();
             }
         }
 
@@ -54,3 +54,4 @@ namespace input {
         return is_key(key, KeyState::RELEASED, true);
     }
 }
+
