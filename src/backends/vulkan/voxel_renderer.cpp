@@ -13,6 +13,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <voxel/mesh_generation.hpp>
+#include <vulkan/vulkan_core.h>
 
 namespace voxel::renderer {
     VoxelRenderer::Buffer VoxelRenderer::Buffer::create(RenderState& render_state, bool cpu_only) {
@@ -104,35 +105,7 @@ namespace voxel::renderer {
         fmt::print("\n");
     }
 
-    void VoxelRenderer::init(RenderState& render_state) {
-        VkCommandPoolCreateInfo command_pool_info = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-            .queueFamilyIndex = render_state.queue_family_index,
-        };
-
-        VK_CHECK(vkCreateCommandPool(render_state.device, &command_pool_info, nullptr, &command_pool));
-
-        VkCommandBufferAllocateInfo cmd_alloc_info = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .pNext = nullptr,
-            .commandPool = command_pool,
-            .level = VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-            .commandBufferCount = 1,
-        };
-
-        VK_CHECK(vkAllocateCommandBuffers(render_state.device, &cmd_alloc_info, &render_cmd_buffer));
-
-		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> ratios = { 
-			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
-		};
-
-        descriptor_allocator.init(render_state.device, 1000, ratios);
-
+    void VoxelRenderer::init_pipeline(RenderState& render_state) {
         VkShaderModule voxel_frag_shader;
         auto voxel_frag_shader_opt = vkutil::load_shader_module(render_state.device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/voxel.frag.spv");
         if (voxel_frag_shader_opt) {
@@ -147,8 +120,7 @@ namespace voxel::renderer {
         if (voxel_vertex_shader_opt) {
             voxel_vertex_shader = *voxel_vertex_shader_opt;
             fmt::println("Voxel vertex shader succesfully loaded");
-        }
-        else {
+        } else {
             fmt::println("Error when building the voxel vertex shader module");
         }
 
@@ -195,6 +167,106 @@ namespace voxel::renderer {
 
         vkDestroyShaderModule(render_state.device, voxel_frag_shader, nullptr);
         vkDestroyShaderModule(render_state.device, voxel_vertex_shader, nullptr);
+    }
+
+    void VoxelRenderer::init_debug_pipeline(RenderState& render_state) {
+        VkShaderModule voxel_frag_shader;
+        auto voxel_frag_shader_opt = vkutil::load_shader_module(render_state.device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/debug_line.frag.spv");
+        if (voxel_frag_shader_opt) {
+            voxel_frag_shader = *voxel_frag_shader_opt;
+            fmt::println("Debug line fragment shader succesfully loaded");
+        } else {
+            fmt::println("Error when building the debug line fragment shader module");
+        }
+
+        VkShaderModule voxel_vertex_shader;
+        auto voxel_vertex_shader_opt = vkutil::load_shader_module(render_state.device, "/home/czebosak/Development/cpp/graphics/vulkan/assets/voxel.vert.spv");
+        if (voxel_vertex_shader_opt) {
+            voxel_vertex_shader = *voxel_vertex_shader_opt;
+            fmt::println("Voxel vertex shader succesfully loaded");
+        } else {
+            fmt::println("Error when building the voxel vertex shader module");
+        }
+        
+        VkPushConstantRange buffer_range = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .offset = 0,
+            .size = sizeof(voxel::VoxelPushConstants),
+        };
+
+        VkPipelineLayoutCreateInfo pipeline_layout_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &buffer_range,
+        };
+
+        VK_CHECK(vkCreatePipelineLayout(render_state.device, &pipeline_layout_info, nullptr, &debug_pipeline_layout));
+        
+        debug_pipeline = hayvk::builders::PipelineBuilder { .pipeline_layout = voxel_pipeline_layout }
+            .set_shaders(voxel_vertex_shader, voxel_frag_shader)
+            .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP)
+            .set_polygon_mode(VK_POLYGON_MODE_LINE)
+            .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
+            .set_multisampling_none()
+            .disable_blending()
+            .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
+            .set_color_attachment_format(render_state.draw_image_format)
+            .set_depth_format(render_state.depth_image_format)
+            .build(render_state.device);
+
+        vkDestroyShaderModule(render_state.device, voxel_frag_shader, nullptr);
+        vkDestroyShaderModule(render_state.device, voxel_vertex_shader, nullptr);
+    }
+
+    void VoxelRenderer::init(RenderState& render_state) {
+        VkCommandPoolCreateInfo command_pool_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = render_state.queue_family_index,
+        };
+
+        VK_CHECK(vkCreateCommandPool(render_state.device, &command_pool_info, nullptr, &command_pool));
+
+        VkCommandBufferAllocateInfo cmd_alloc_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .commandPool = command_pool,
+            .level = VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+            .commandBufferCount = 1,
+        };
+
+        VK_CHECK(vkAllocateCommandBuffers(render_state.device, &cmd_alloc_info, &render_cmd_buffer));
+
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> ratios = { 
+			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
+		};
+
+        descriptor_allocator.init(render_state.device, 1000, ratios);
+
+        // Textures
+        VkSamplerCreateInfo sampler_info = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_NEAREST,
+            .minFilter = VK_FILTER_NEAREST,
+        };
+
+        vkCreateSampler(render_state.device, &sampler_info, nullptr, &texture_sampler);
+
+        texture_descriptor_layout = DescriptorLayoutBuilder()
+            .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+            .build(render_state.device, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+        init_pipeline(render_state);
+        
+        #ifndef NDEBUG
+        init_debug_pipeline(render_state);
+        #else
+        debug_pipeline = nullptr;
+        #endif
 
         staging_buffer = Buffer::create(render_state, true);
 
@@ -379,6 +451,38 @@ namespace voxel::renderer {
             }
 
             if (chunk.mesh.face_count == 0) {
+                continue;
+            }
+
+            push_constants.mvp = camera_matrix * glm::translate(glm::mat4(1.0f), glm::vec3(position * 16));
+            push_constants.face_buffer = chunk.mesh.allocated_addr;
+            vkCmdPushConstants(render_cmd_buffer, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VoxelPushConstants), &push_constants);
+
+            vkCmdDraw(render_cmd_buffer, 4, chunk.mesh.face_count, 0, 0);
+        }
+
+        vkCmdBindPipeline(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, debug_pipeline);
+
+        VkViewport debug_viewport = {
+            .x = 0,
+            .y = 0,
+            .width = (float)render_state.draw_extent.width,
+            .height = (float)render_state.draw_extent.height,
+            .minDepth = 0.f,
+            .maxDepth = 1.f,
+        };
+
+        vkCmdSetViewport(render_cmd_buffer, 0, 1, &viewport);
+
+        VkRect2D debug_scissor = {
+            .offset = {0, 0},
+            .extent = render_state.draw_extent,
+        };
+
+        vkCmdSetScissor(render_cmd_buffer, 0, 1, &scissor);
+
+        for (auto& [position, chunk] : chunk_manager.chunks) {
+            if (!chunk.is_mesh_ready()) {
                 continue;
             }
 

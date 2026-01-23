@@ -75,6 +75,9 @@ namespace voxel::renderer {
         VkPipeline voxel_pipeline;
         VkPipelineLayout voxel_pipeline_layout;
 
+        VkPipeline debug_pipeline;
+        VkPipelineLayout debug_pipeline_layout;
+
         DescriptorAllocatorGrowable descriptor_allocator;
 
         AllocatedImage error_image;
@@ -85,6 +88,9 @@ namespace voxel::renderer {
         Buffer staging_buffer;
 
         std::vector<Buffer> buffers;
+
+        void init_pipeline(RenderState& render_state);
+        void init_debug_pipeline(RenderState& render_state);
     public:
         void init(RenderState& render_state);
 

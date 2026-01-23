@@ -83,13 +83,24 @@ inline void generate_visible_faces(std::vector<PackedFace>& packed_faces, size_t
     }
 }
 
-std::vector<PackedFace> voxel::generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry, NeighboringChunks neighboring_chunks) {
+uint32_t pack_block_data(BlockID id) {
+    return (id & 0x7FFF) << 17;
+}
+
+std::pair<std::vector<PackedFace>, std::vector<uint32_t>> voxel::generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry, NeighboringChunks neighboring_chunks) {
     // Face instance data:
     // 00000000000000FFFYYYYYZZZZZXXXXX
     // F - face direction
     // X, Y, Z position
 
+    // Block data
+    // BBBBBBBBBBBBBBBAAAAARRRRGGGGBBBB
+    // B - block id
+    // A - ambient occlusion data
+    // RGB - lighting channels
+
     std::vector<PackedFace> packed_faces;
+    std::vector<uint32_t> block_data;
 
     auto iota = std::views::iota(size_t(0), CHUNK_SIZE);
 
@@ -101,7 +112,9 @@ std::vector<PackedFace> voxel::generate_mesh(RenderState& render_state, const vo
         }
 
         generate_visible_faces(packed_faces, x, y, z, chunk, neighboring_chunks, air_id);
+
+        block_data.emplace_back(pack_block_data(chunk.data[x][y][z].id));
     }
 
-    return packed_faces;
+    return std::make_pair(std::move(packed_faces), std::move(block_data));
 };

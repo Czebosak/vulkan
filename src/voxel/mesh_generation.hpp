@@ -16,5 +16,5 @@ namespace voxel {
         Chunk* back;
     };
 
-    std::vector<voxel::PackedFace> generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry, NeighboringChunks neighboring_chunks);
+    std::pair<std::vector<PackedFace>, std::vector<uint32_t>> generate_mesh(RenderState& render_state, const voxel::Chunk& chunk, const registry::Registry& registry, NeighboringChunks neighboring_chunks);
 }

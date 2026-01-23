@@ -143,22 +143,27 @@ uint32_t Engine::init_vulkan(GLFWwindow *window) {
     if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) return -6;
 
     //vulkan 1.3 features
-    VkPhysicalDeviceVulkan13Features features{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
-    features.dynamicRendering = true;
-    features.synchronization2 = true;
+    VkPhysicalDeviceVulkan13Features features_13{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+    features_13.dynamicRendering = true;
+    features_13.synchronization2 = true;
 
     //vulkan 1.2 features
-    VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
-    features12.bufferDeviceAddress = true;
-    features12.descriptorIndexing = true;
+    VkPhysicalDeviceVulkan12Features features_12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+    features_12.bufferDeviceAddress = true;
+    features_12.descriptorIndexing = true;
+
+    VkPhysicalDeviceFeatures features = {
+        .fillModeNonSolid = true,  
+    };
 
     //use vkbootstrap to select a gpu. 
     //We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
     vkb::PhysicalDeviceSelector selector { vkb_inst };
     vkb::PhysicalDevice vkb_physical_device = selector
         .set_minimum_version(1, 3)
-        .set_required_features_13(features)
-        .set_required_features_12(features12)
+        .set_required_features_13(features_13)
+        .set_required_features_12(features_12)
+        .set_required_features(features)
         .set_surface(surface)
         .select()
         .value();
