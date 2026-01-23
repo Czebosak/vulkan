@@ -99,7 +99,16 @@ namespace voxel::renderer {
 
         void free_mesh(RenderState& render_state, const Mesh& mesh);
 
-        VkCommandBuffer draw(RenderState& render_state, ChunkManager& chunk_manager, VkFormat color_attachment_format, VkFormat depth_attachment_format, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, const glm::mat4& camera_matrix);
+        VkCommandBuffer draw(
+            RenderState& render_state,
+            ChunkManager& chunk_manager,
+            VkFormat color_attachment_format,
+            VkFormat depth_attachment_format,
+            VkRenderingAttachmentInfo color_attachment,
+            VkRenderingAttachmentInfo depth_attachment,
+            const glm::mat4& camera_matrix,
+            bool draw_wireframe
+        );
 
         void destroy(RenderState& render_state);
     };

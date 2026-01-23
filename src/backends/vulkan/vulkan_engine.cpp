@@ -764,6 +764,8 @@ void Engine::init_default_data() {
         //glm::perspective(glm::radians(70.0f), 640.0f / 480.0f, 0.1f, 10000.0f)
         glm::perspectiveZO(glm::radians(70.0f), (float)swapchain_extent.width / (float)swapchain_extent.height, 10000.0f, 0.1f)
     );
+
+    debug_draw = false;
 }
 
 //
@@ -862,6 +864,10 @@ void Engine::run() {
             ImGui::InputFloat4("data2", (float*)&push_constants.data2);
             ImGui::InputFloat4("data3", (float*)&push_constants.data3);
             ImGui::InputFloat4("data4", (float*)&push_constants.data4);
+
+            if (ImGui::Button("Toggle Debug Draw")) {
+                debug_draw = !debug_draw;
+            }
 
             ImGui::Text("%f, %f", glm::degrees(game_state.yaw), glm::degrees(game_state.pitch));
             ImGui::Text("%f, %f, %f", game_state.camera.position.x, game_state.camera.position.y, game_state.camera.position.z);
@@ -1075,7 +1081,16 @@ void Engine::draw() {
     VkRenderingAttachmentInfo color_attachment = vkinit::attachment_info(draw_image.image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo depth_attachment = vkinit::depth_attachment_info(depth_image.image_view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-    VkCommandBuffer voxel_cmds = voxel_renderer.draw(render_state, game_state.chunk_manager, draw_image.image_format, depth_image.image_format, color_attachment, depth_attachment, camera_mat);
+    VkCommandBuffer voxel_cmds = voxel_renderer.draw(
+        render_state,
+        game_state.chunk_manager,
+        draw_image.image_format,
+        depth_image.image_format,
+        color_attachment,
+        depth_attachment,
+        camera_mat,
+        debug_draw
+    );
     vkCmdExecuteCommands(cmd, 1, &voxel_cmds);
 
     //transition the draw image and the swapchain image into their correct transfer layouts

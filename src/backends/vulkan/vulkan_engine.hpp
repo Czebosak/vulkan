@@ -118,6 +118,8 @@ private:
 
     resource::ResourceLoader resource_loader;
 
+    bool debug_draw;
+
     friend RenderState;
 
     AllocatedBuffer create_buffer(size_t alloc_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);

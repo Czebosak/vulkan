@@ -348,7 +348,16 @@ namespace voxel::renderer {
         buf.free(block_idx, mesh.face_count * sizeof(PackedFace));
     }
 
-    VkCommandBuffer VoxelRenderer::draw(RenderState& render_state, ChunkManager& chunk_manager, VkFormat color_attachment_format, VkFormat depth_attachment_format, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, const glm::mat4& camera_matrix) {
+    VkCommandBuffer VoxelRenderer::draw(
+        RenderState& render_state,
+        ChunkManager& chunk_manager,
+        VkFormat color_attachment_format,
+        VkFormat depth_attachment_format,
+        VkRenderingAttachmentInfo color_attachment,
+        VkRenderingAttachmentInfo depth_attachment,
+        const glm::mat4& camera_matrix,
+        bool draw_wireframe
+    ) {
         VK_CHECK(vkResetCommandBuffer(render_cmd_buffer, 0));
 
         descriptor_allocator.clear_pools(render_state.device);
@@ -461,36 +470,38 @@ namespace voxel::renderer {
             vkCmdDraw(render_cmd_buffer, 4, chunk.mesh.face_count, 0, 0);
         }
 
-        vkCmdBindPipeline(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, debug_pipeline);
+        if (draw_wireframe) {
+            vkCmdBindPipeline(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, debug_pipeline);
 
-        VkViewport debug_viewport = {
-            .x = 0,
-            .y = 0,
-            .width = (float)render_state.draw_extent.width,
-            .height = (float)render_state.draw_extent.height,
-            .minDepth = 0.f,
-            .maxDepth = 1.f,
-        };
+            VkViewport debug_viewport = {
+                .x = 0,
+                .y = 0,
+                .width = (float)render_state.draw_extent.width,
+                .height = (float)render_state.draw_extent.height,
+                .minDepth = 0.f,
+                .maxDepth = 1.f,
+            };
 
-        vkCmdSetViewport(render_cmd_buffer, 0, 1, &viewport);
+            vkCmdSetViewport(render_cmd_buffer, 0, 1, &viewport);
 
-        VkRect2D debug_scissor = {
-            .offset = {0, 0},
-            .extent = render_state.draw_extent,
-        };
+            VkRect2D debug_scissor = {
+                .offset = {0, 0},
+                .extent = render_state.draw_extent,
+            };
 
-        vkCmdSetScissor(render_cmd_buffer, 0, 1, &scissor);
+            vkCmdSetScissor(render_cmd_buffer, 0, 1, &scissor);
 
-        for (auto& [position, chunk] : chunk_manager.chunks) {
-            if (!chunk.is_mesh_ready()) {
-                continue;
+            for (auto& [position, chunk] : chunk_manager.chunks) {
+                if (!chunk.is_mesh_ready()) {
+                    continue;
+                }
+
+                push_constants.mvp = camera_matrix * glm::translate(glm::mat4(1.0f), glm::vec3(position * 16));
+                push_constants.face_buffer = chunk.mesh.allocated_addr;
+                vkCmdPushConstants(render_cmd_buffer, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VoxelPushConstants), &push_constants);
+
+                vkCmdDraw(render_cmd_buffer, 4, chunk.mesh.face_count, 0, 0);
             }
-
-            push_constants.mvp = camera_matrix * glm::translate(glm::mat4(1.0f), glm::vec3(position * 16));
-            push_constants.face_buffer = chunk.mesh.allocated_addr;
-            vkCmdPushConstants(render_cmd_buffer, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VoxelPushConstants), &push_constants);
-
-            vkCmdDraw(render_cmd_buffer, 4, chunk.mesh.face_count, 0, 0);
         }
 
         vkCmdEndRendering(render_cmd_buffer);
