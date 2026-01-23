@@ -471,6 +471,10 @@ namespace voxel::renderer {
         }
 
         if (draw_wireframe) {
+            if (debug_pipeline == nullptr) {
+                init_debug_pipeline(render_state);
+            }
+
             vkCmdBindPipeline(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, debug_pipeline);
 
             VkViewport debug_viewport = {

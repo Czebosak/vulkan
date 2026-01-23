@@ -1,4 +1,7 @@
 #include "vulkan_engine.hpp"
+#include "input.hpp"
+#include <GLFW/glfw3.h>
+#include <fmt/base.h>
 
 #if defined(_WIN32)
     #define VK_USE_PLATFORM_WIN32_KHR
@@ -844,7 +847,18 @@ void Engine::run() {
         delta_time = current_frame - last_frame;
         last_frame = current_frame;
 
-        input.update();
+        if (input.is_key_just_pressed(input::Key::KEY_ESCAPE)) {
+            fmt::println("s");
+            int value = glfwGetInputMode(window, GLFW_CURSOR);
+            int new_value;
+            if (value == GLFW_CURSOR_DISABLED) {
+                new_value = GLFW_CURSOR_NORMAL;
+            } else {
+                new_value = GLFW_CURSOR_DISABLED;
+            }
+
+            glfwSetInputMode(window, GLFW_CURSOR, new_value);
+        }
 
         game_state.main_loop(input, static_cast<float>(delta_time));
         
@@ -877,6 +891,7 @@ void Engine::run() {
 
         draw();
 
+        input.update();
         glfwPollEvents();
     }
 }
