@@ -3,12 +3,14 @@
 #include "backends/vulkan/allocated_image.hpp"
 #include "voxel/render_types.hpp"
 
+#include <boost/dynamic_bitset_fwd.hpp>
 #include <fmt/core.h>
 
 #include <backends/vulkan/defines.hpp>
 #include <backends/vulkan/initializers.hpp>
 #include <backends/vulkan/pipeline_builder.hpp>
 #include <backends/vulkan/descriptors.hpp>
+#include <backends/vulkan/images.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -285,8 +287,8 @@ namespace voxel::renderer {
         error_image = AllocatedImage::create(render_state, pixels.data(), VkExtent3D {16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
     }
 
-    void VoxelRenderer::allocate_mesh(RenderState& render_state, std::span<PackedFace> data, Mesh& mesh) {
-        size_t size = data.size_bytes();
+    void VoxelRenderer::allocate_mesh(RenderState& render_state, std::span<PackedFace> face_data, std::span<uint32_t> block_data, Mesh& mesh) {
+        size_t size = face_data.size_bytes() + block_data.size_bytes();
         size_t needed_blocks = Buffer::calculate_needed_blocks(size);
 
         size_t block_i = BLOCK_COUNT;
@@ -305,29 +307,82 @@ namespace voxel::renderer {
 
         size_t staging_block_i = staging_buffer.allocate(needed_blocks);
 
-        memcpy((uint8_t*)staging_buffer.get_allocated_buffer().info.pMappedData + (staging_block_i * BLOCK_SIZE), data.data(), size);
+        uint8_t* staging_ptr = (uint8_t*)staging_buffer.get_allocated_buffer().info.pMappedData + (staging_block_i * BLOCK_SIZE);
+
+        memcpy(staging_ptr, face_data.data(), face_data.size_bytes());
+        memcpy(staging_ptr + face_data.size_bytes(), block_data.data(), block_data.size_bytes());
+
+        VkDeviceAddress allocated_addr = buffers[buf_i].get_buffer_addr() + block_i * BLOCK_SIZE;
+
+        size_t image_id = image_status.find_first();
+
+        if (image_id == -1) {
+            image_id = block_images.size();
+            block_images.emplace_back(AllocatedImage::create(
+                render_state,
+                VkExtent3D { CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE },
+                VK_FORMAT_R32_UINT,
+                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                false,
+                VK_IMAGE_TYPE_3D
+            ));
+            image_status.push_back(0);
+        }
+
+        image_status[image_id] = 0;
 
         mesh = Mesh {
-            .allocated_addr = buffers[buf_i].get_buffer_addr() + block_i * BLOCK_SIZE,
+            .allocated_addr = allocated_addr,
             .buffer_index = static_cast<uint32_t>(buf_i),
-            .face_count = static_cast<uint32_t>(data.size()),
+            .face_count = static_cast<uint32_t>(face_data.size()),
+            .block_data_image_id = static_cast<uint32_t>(image_id),
             .state = MeshState::Pending,
         };
 
         render_state.resource_loader->add_job(resource::Job {
-            .func = [block_i, staging_block_i, size, buf_i, staging_buffer = staging_buffer.get_buffer_handle(), buffers = &this->buffers, mesh_state_ptr = &mesh.state](VkCommandBuffer cmd) {
+            .func = [
+                block_i,
+                staging_block_i,
+                mesh_data_size = face_data.size_bytes(),
+                buf_i,
+                staging_buffer = staging_buffer.get_buffer_handle(),
+                buffers = &this->buffers,
+                mesh_state_ptr = &mesh.state,
+                block_img = block_images[image_id].image
+            ](VkCommandBuffer cmd) {
                 if (*mesh_state_ptr != MeshState::Pending) {
                     return false;
                 }
 
-                VkBufferCopy data_copy = {
+                // Copy mesh data to buffer
+                VkBufferCopy mesh_data_copy = {
                     .srcOffset = staging_block_i * BLOCK_SIZE,
                     .dstOffset = block_i * BLOCK_SIZE,
-                    .size = size,
+                    .size = mesh_data_size,
                 };
 
-                vkCmdCopyBuffer(cmd, staging_buffer, (*buffers)[buf_i].get_buffer_handle(), 1, &data_copy);
-                
+                vkCmdCopyBuffer(cmd, staging_buffer, (*buffers)[buf_i].get_buffer_handle(), 1, &mesh_data_copy);
+
+                // Fill block data image
+                vkutil::transition_image(cmd, block_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); 
+
+                VkBufferImageCopy block_data_copy = {
+                    .bufferOffset = mesh_data_size,
+                    .bufferRowLength = 0,
+                    .bufferImageHeight = 0,
+                    .imageSubresource = {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount = 1,
+                    },
+                    .imageExtent = { CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE },
+                };
+
+                vkCmdCopyBufferToImage(cmd, staging_buffer, block_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &block_data_copy);
+
+                vkutil::transition_image(cmd, block_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
                 return true;
             },
             .callback = [mesh_state_ptr = &mesh.state, staging_buffer_ptr = &staging_buffer, staging_block_i, needed_blocks]() {
@@ -346,6 +401,8 @@ namespace voxel::renderer {
         size_t block_idx = (mesh.allocated_addr - buf.get_buffer_addr()) / BLOCK_SIZE;
 
         buf.free(block_idx, mesh.face_count * sizeof(PackedFace));
+
+        image_status[mesh.block_data_image_id] = 1;
     }
 
     VkCommandBuffer VoxelRenderer::draw(
@@ -426,6 +483,8 @@ namespace voxel::renderer {
         const auto& registry = registry::Registry::get();
         for (auto& [position, chunk] : chunk_manager.chunks) {
             if (chunk.mesh.state == MeshState::MarkedForCleanup) {
+                assert(chunk.mesh.face_count > 0);
+                
                 free_mesh(render_state, chunk.mesh);
 
                 chunk.mesh.state = MeshState::Dirty;
@@ -446,10 +505,10 @@ namespace voxel::renderer {
                     .back   = get_neighboring(position.x, position.y, position.z + 1),
                 };
 
-                auto [faces, block] = generate_mesh(render_state, chunk, registry, neighboring);
+                auto [face_data, block_data] = generate_mesh(render_state, chunk, registry, neighboring);
 
-                if (faces.size() != 0) {
-                    allocate_mesh(render_state, faces, chunk.mesh);
+                if (face_data.size() != 0) {
+                    allocate_mesh(render_state, face_data, block_data, chunk.mesh);
                 } else {
                     chunk.mesh.state = MeshState::Ready;
                 }

@@ -48,6 +48,7 @@ namespace voxel {
         VkDeviceAddress allocated_addr;
         uint32_t buffer_index;
         uint32_t face_count;
+        uint32_t block_data_image_id;
         MeshState state;
     };
 

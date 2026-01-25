@@ -28,5 +28,5 @@ namespace vkinit {
     
     VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usage_flags, VkExtent3D extent, VkImageType type = VK_IMAGE_TYPE_2D);
 
-    VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags);
+    VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags, VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D);
 }

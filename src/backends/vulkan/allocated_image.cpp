@@ -15,7 +15,7 @@ AllocatedImage AllocatedImage::create(RenderState& render_state, VkExtent3D size
         .image_format = format,
     };
 
-    VkImageCreateInfo img_info = vkinit::image_create_info(format, usage, size);
+    VkImageCreateInfo img_info = vkinit::image_create_info(format, usage, size, type);
     if (mipmapped) {
         img_info.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(size.width, size.height)))) + 1;
     }
@@ -37,7 +37,7 @@ AllocatedImage AllocatedImage::create(RenderState& render_state, VkExtent3D size
     }
 
     // build a image-view for the image
-    VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, new_image.image, aspectFlag);
+    VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, new_image.image, aspectFlag, static_cast<VkImageViewType>(type));
     view_info.subresourceRange.levelCount = img_info.mipLevels;
 
     VK_CHECK(vkCreateImageView(render_state.device, &view_info, nullptr, &new_image.image_view));
@@ -51,11 +51,11 @@ AllocatedImage AllocatedImage::create(RenderState& render_state, void* data, VkE
 
     memcpy(staging_buffer.info.pMappedData, data, data_size);
 
-    AllocatedImage new_image = AllocatedImage::create(render_state, size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
+    AllocatedImage new_image = AllocatedImage::create(render_state, size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, type);
 
     render_state.resource_loader->add_job(resource::Job {
         .func = [staging_buf = staging_buffer.buffer, img = new_image.image, size](VkCommandBuffer cmd) {
-            vkutil::transition_image(cmd, img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            vkutil::transition_image(cmd, img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); 
 
             VkBufferImageCopy copy_region = {
                 .bufferOffset = 0,

@@ -37,7 +37,8 @@ void voxel::ChunkManager::update(glm::dvec3 player_position, int hrender_distanc
         // Mark all neighbors as dirty
         auto mark_as_dirty_if_exists = [&](int x, int y, int z) {
             auto it = chunks.find(glm::ivec3(x, y, z));
-            if (it != chunks.end()) it->second.mesh.state = MeshState::MarkedForCleanup;
+            if (it != chunks.end() && it->second.mesh.state != MeshState::Dirty && it->second.mesh.face_count > 0)
+                it->second.mesh.state = MeshState::MarkedForCleanup;
         };
         
         mark_as_dirty_if_exists(chunk_pos.x, chunk_pos.y + 1, chunk_pos.z);

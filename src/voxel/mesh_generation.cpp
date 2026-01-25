@@ -27,7 +27,7 @@ consteval uint8_t face_to_bit(Face f) {
     return faces;
 } */
 
-uint32_t pack_face(size_t x, size_t y, size_t z, Face face) {
+inline uint32_t pack_face(size_t x, size_t y, size_t z, Face face) {
     static_assert(magic_enum::enum_integer(magic_enum::enum_values<Face>().back()) <= (1 << 3));
 
     uint32_t packed = (x << 0) | (y << 5) | (z << 10) | (magic_enum::enum_integer(face) << 15);
@@ -83,7 +83,7 @@ inline void generate_visible_faces(std::vector<PackedFace>& packed_faces, size_t
     }
 }
 
-uint32_t pack_block_data(BlockID id) {
+inline uint32_t pack_block_data(BlockID id) {
     return (id & 0x7FFF) << 17;
 }
 
@@ -107,13 +107,13 @@ std::pair<std::vector<PackedFace>, std::vector<uint32_t>> voxel::generate_mesh(R
     BlockID air_id = registry.get_block("skibidi:air")->id;
 
     for (auto [x, y, z] : std::views::cartesian_product(iota, iota, iota)) {
+        block_data.emplace_back(pack_block_data(chunk.data[x][y][z].id));
+
         if (chunk.data[x][y][z].id == air_id) {
             continue;
         }
 
         generate_visible_faces(packed_faces, x, y, z, chunk, neighboring_chunks, air_id);
-
-        block_data.emplace_back(pack_block_data(chunk.data[x][y][z].id));
     }
 
     return std::make_pair(std::move(packed_faces), std::move(block_data));

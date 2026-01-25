@@ -1,9 +1,11 @@
 #pragma once
+#include <boost/dynamic_bitset/dynamic_bitset.hpp>
 #include <vulkan/vulkan.h>
 
 #include <glm/glm.hpp>
 
 #include <bitset>
+#include <dynamic_bitset.hpp>
 
 #include <backends/vulkan/render_state.hpp>
 #include <backends/vulkan/allocated_buffer.hpp>
@@ -88,6 +90,8 @@ namespace voxel::renderer {
         Buffer staging_buffer;
 
         std::vector<Buffer> buffers;
+        std::vector<AllocatedImage> block_images;
+        boost::dynamic_bitset<> image_status;
 
         void init_pipeline(RenderState& render_state);
         void init_debug_pipeline(RenderState& render_state);
@@ -95,7 +99,7 @@ namespace voxel::renderer {
         void init(RenderState& render_state);
 
         // Size required in bytes, updates the mesh state
-        void allocate_mesh(RenderState& render_state, std::span<PackedFace> data, Mesh& mesh);
+        void allocate_mesh(RenderState& render_state, std::span<PackedFace> face_data, std::span<uint32_t> block_data, Mesh& mesh);
 
         void free_mesh(RenderState& render_state, const Mesh& mesh);
 

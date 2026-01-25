@@ -149,7 +149,7 @@ namespace vkinit {
         VkImageCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .pNext = nullptr,
-            .imageType = VK_IMAGE_TYPE_2D,
+            .imageType = type,
             .format = format,
             .extent = extent,
             .mipLevels = 1,
@@ -162,15 +162,15 @@ namespace vkinit {
         };
 
         return info;
-    }
+    } 
 
-    VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags) {
+    VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags, VkImageViewType type) {
         // build a image-view for the depth image to use for rendering
         VkImageViewCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .pNext = nullptr,
             .image = image,
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .viewType = type,
             .format = format,
             .subresourceRange = {
                 .aspectMask = aspect_flags,

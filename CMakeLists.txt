@@ -80,7 +80,7 @@ target_include_directories(VoxelGame SYSTEM PRIVATE "external/flecs/include")
 target_include_directories(VoxelGame SYSTEM PRIVATE "external/ctre")
 target_include_directories(VoxelGame SYSTEM PRIVATE "external/concurrentqueue")
 target_include_directories(VoxelGame SYSTEM PRIVATE "external/dylib/include")
-#target_include_directories(VoxelGame PRIVATE "external/simdjson")
+target_include_directories(VoxelGame SYSTEM PRIVATE "external/boost")
 
 #if(USE_FEATURE_X)
     #add_definitions(-DFEATURE_X_ENABLED)
