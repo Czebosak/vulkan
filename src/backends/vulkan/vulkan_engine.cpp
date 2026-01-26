@@ -146,14 +146,20 @@ uint32_t Engine::init_vulkan(GLFWwindow *window) {
     if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) return -6;
 
     //vulkan 1.3 features
-    VkPhysicalDeviceVulkan13Features features_13{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
-    features_13.dynamicRendering = true;
-    features_13.synchronization2 = true;
+    VkPhysicalDeviceVulkan13Features features_13{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .synchronization2 = true,
+        .dynamicRendering = true,
+    };
 
     //vulkan 1.2 features
-    VkPhysicalDeviceVulkan12Features features_12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
-    features_12.bufferDeviceAddress = true;
-    features_12.descriptorIndexing = true;
+    VkPhysicalDeviceVulkan12Features features_12 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .descriptorIndexing = true,
+        .shaderSampledImageArrayNonUniformIndexing = true,
+        .runtimeDescriptorArray = true,
+        .bufferDeviceAddress = true,
+    };
 
     VkPhysicalDeviceFeatures features = {
         .fillModeNonSolid = true,  
@@ -681,7 +687,7 @@ void Engine::init_voxel_pipeline() {
     VkPushConstantRange bufferRange = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = sizeof(voxel::VoxelPushConstants),
+        .size = sizeof(voxel::renderer::VoxelPushConstants),
     };
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {

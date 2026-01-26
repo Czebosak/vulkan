@@ -30,6 +30,7 @@ Chunk WorldGenerator::generate_chunk(glm::ivec3 chunk_position, const registry::
     BlockID grass = registry.get_block("skibidi:grass")->id;
 
     for (auto [x, y, z] : std::views::cartesian_product(iota, iota, iota)) {
+        //chunk.data[x][y][z] = Block { dirt };
         if (y + (chunk_position.y * CHUNK_SIZE) == 3) {
             chunk.data[x][y][z] = Block { grass };
         } else if ((y + (chunk_position.y * CHUNK_SIZE) < 3) && y + (chunk_position.y * CHUNK_SIZE) >= 0) {

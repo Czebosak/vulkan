@@ -14,8 +14,6 @@ void resource::ResourceLoader::run(std::stop_token st) {
         size_t job_count = jobs.wait_dequeue_bulk(job, MAX_JOB_COUNT);
         std::bitset<MAX_JOB_COUNT> jobs_executed;
 
-        fmt::println("yes");
-
         VK_CHECK(vkResetCommandBuffer(command_buffer, 0));
 
         VkCommandBufferBeginInfo cmd_begin_info = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -31,13 +29,9 @@ void resource::ResourceLoader::run(std::stop_token st) {
 
         VkCommandBufferSubmitInfo submit_info = vkinit::command_buffer_submit_info(command_buffer);
         VkSubmitInfo2 submit = vkinit::submit_info(&submit_info, nullptr, nullptr);
-        //VK_CHECK(vkQueueSubmit2(transfer_queue, 1, &submit, fence));
-        vkQueueSubmit2(transfer_queue, 1, &submit, fence);
+        VK_CHECK(vkQueueSubmit2(transfer_queue, 1, &submit, fence));
 
-        fmt::println("WEEE ARE");
-        vkWaitForFences(device, 1, &fence, true, 1000000000 /* 1s */);
-        //VK_CHECK(vkWaitForFences(device, 1, &fence, true, 1000000000 /* 1s */));
-        fmt::println("HEERE");
+        VK_CHECK(vkWaitForFences(device, 1, &fence, true, 1000000000 /* 1s */));
 
 
         for (int i = 0; i < job_count; i++) {

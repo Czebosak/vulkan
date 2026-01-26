@@ -20,6 +20,7 @@ namespace voxel::renderer {
     struct VoxelPushConstants {
         glm::mat4 mvp;
         VkDeviceAddress face_buffer;
+        uint32_t block_data_image_index;
     };
 
     /* struct AllocInfo {
@@ -86,6 +87,9 @@ namespace voxel::renderer {
 
         VkDescriptorSetLayout texture_descriptor_layout;
         VkSampler texture_sampler;
+
+        VkDescriptorSetLayout block_data_descriptor_layout;
+        VkSampler block_data_image_sampler;
 
         Buffer staging_buffer;
 

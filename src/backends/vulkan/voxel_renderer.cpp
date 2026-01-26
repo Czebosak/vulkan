@@ -1,21 +1,22 @@
 #include "voxel_renderer.hpp"
-#include "backends/vulkan/allocated_buffer.hpp"
-#include "backends/vulkan/allocated_image.hpp"
-#include "voxel/render_types.hpp"
+#include "registry.hpp"
+#include <vulkan/vulkan_core.h>
 
 #include <boost/dynamic_bitset_fwd.hpp>
 #include <fmt/core.h>
 
+#include <backends/vulkan/allocated_buffer.hpp>
+#include <backends/vulkan/allocated_image.hpp>
 #include <backends/vulkan/defines.hpp>
 #include <backends/vulkan/initializers.hpp>
+#include <backends/vulkan/images.hpp>
 #include <backends/vulkan/pipeline_builder.hpp>
 #include <backends/vulkan/descriptors.hpp>
-#include <backends/vulkan/images.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <voxel/mesh_generation.hpp>
-#include <vulkan/vulkan_core.h>
+#include <voxel/render_types.hpp>
 
 namespace voxel::renderer {
     VoxelRenderer::Buffer VoxelRenderer::Buffer::create(RenderState& render_state, bool cpu_only) {
@@ -126,29 +127,21 @@ namespace voxel::renderer {
             fmt::println("Error when building the voxel vertex shader module");
         }
 
-        // Textures
-        VkSamplerCreateInfo sampler_info = {
-            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-            .magFilter = VK_FILTER_NEAREST,
-            .minFilter = VK_FILTER_NEAREST,
+        std::array<VkDescriptorSetLayout, 2> set_layouts = {
+            texture_descriptor_layout,
+            block_data_descriptor_layout,
         };
 
-        vkCreateSampler(render_state.device, &sampler_info, nullptr, &texture_sampler);
-
-        texture_descriptor_layout = DescriptorLayoutBuilder()
-            .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-            .build(render_state.device, VK_SHADER_STAGE_FRAGMENT_BIT);
-        
         VkPushConstantRange buffer_range = {
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             .offset = 0,
-            .size = sizeof(voxel::VoxelPushConstants),
+            .size = sizeof(VoxelPushConstants),
         };
 
         VkPipelineLayoutCreateInfo pipeline_layout_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts = &texture_descriptor_layout,
+            .setLayoutCount = set_layouts.size(),
+            .pSetLayouts = set_layouts.data(),
             .pushConstantRangeCount = 1,
             .pPushConstantRanges = &buffer_range,
         };
@@ -193,7 +186,7 @@ namespace voxel::renderer {
         VkPushConstantRange buffer_range = {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,
-            .size = sizeof(voxel::VoxelPushConstants),
+            .size = sizeof(VoxelPushConstants),
         };
 
         VkPipelineLayoutCreateInfo pipeline_layout_info = {
@@ -250,22 +243,39 @@ namespace voxel::renderer {
         descriptor_allocator.init(render_state.device, 1000, ratios);
 
         // Textures
-        VkSamplerCreateInfo sampler_info = {
-            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-            .magFilter = VK_FILTER_NEAREST,
-            .minFilter = VK_FILTER_NEAREST,
-        };
+        {
+            VkSamplerCreateInfo sampler_info = {
+                .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                .magFilter = VK_FILTER_NEAREST,
+                .minFilter = VK_FILTER_NEAREST,
+            };
 
-        vkCreateSampler(render_state.device, &sampler_info, nullptr, &texture_sampler);
+            vkCreateSampler(render_state.device, &sampler_info, nullptr, &texture_sampler);
 
-        texture_descriptor_layout = DescriptorLayoutBuilder()
-            .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-            .build(render_state.device, VK_SHADER_STAGE_FRAGMENT_BIT);
+            texture_descriptor_layout = DescriptorLayoutBuilder()
+                .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                .build(render_state.device, VK_SHADER_STAGE_FRAGMENT_BIT);
+        }
+
+        // Block data image layout stuff
+        {
+            VkSamplerCreateInfo sampler_info = {
+                .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                .magFilter = VK_FILTER_NEAREST,
+                .minFilter = VK_FILTER_NEAREST,
+            };
+
+            vkCreateSampler(render_state.device, &sampler_info, nullptr, &block_data_image_sampler);
+
+            block_data_descriptor_layout = DescriptorLayoutBuilder()
+                .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                .build(render_state.device, VK_SHADER_STAGE_FRAGMENT_BIT);
+        }
 
         init_pipeline(render_state);
         
         #ifndef NDEBUG
-        init_debug_pipeline(render_state);
+        //init_debug_pipeline(render_state);
         #else
         debug_pipeline = nullptr;
         #endif
@@ -367,7 +377,7 @@ namespace voxel::renderer {
                 vkutil::transition_image(cmd, block_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); 
 
                 VkBufferImageCopy block_data_copy = {
-                    .bufferOffset = mesh_data_size,
+                    .bufferOffset = staging_block_i * BLOCK_SIZE + mesh_data_size,
                     .bufferRowLength = 0,
                     .bufferImageHeight = 0,
                     .imageSubresource = {
@@ -480,6 +490,18 @@ namespace voxel::renderer {
 
         vkCmdBindDescriptorSets(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline_layout, 0, 1, &image_set, 0, nullptr);
 
+        VkDescriptorSet block_data_image_set = descriptor_allocator.allocate(render_state.device, block_data_descriptor_layout);
+        {
+            DescriptorWriter writer;
+            for (int i = 0; i < block_images.size(); i++) {
+                writer.write_image(0, block_images[i].image_view, block_data_image_sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            }
+
+            writer.update_set(render_state.device, block_data_image_set);
+        }
+
+        vkCmdBindDescriptorSets(render_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, voxel_pipeline_layout, 1, 1, &block_data_image_set, 0, nullptr);
+
         const auto& registry = registry::Registry::get();
         for (auto& [position, chunk] : chunk_manager.chunks) {
             if (chunk.mesh.state == MeshState::MarkedForCleanup) {
@@ -524,7 +546,8 @@ namespace voxel::renderer {
 
             push_constants.mvp = camera_matrix * glm::translate(glm::mat4(1.0f), glm::vec3(position * 16));
             push_constants.face_buffer = chunk.mesh.allocated_addr;
-            vkCmdPushConstants(render_cmd_buffer, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VoxelPushConstants), &push_constants);
+            push_constants.block_data_image_index = chunk.mesh.block_data_image_id;
+            vkCmdPushConstants(render_cmd_buffer, voxel_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(VoxelPushConstants), &push_constants);
 
             vkCmdDraw(render_cmd_buffer, 4, chunk.mesh.face_count, 0, 0);
         }

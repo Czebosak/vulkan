@@ -91,11 +91,12 @@ const vec2 UV[4] = {
 
 struct UnpackedFaceData {
     uint face;
-    vec3 pos;
+    ivec3 pos;
 };
 
 layout (location = 0) out vec2 outUV;
 layout (location = 1) out vec3 outNormal;
+layout (location = 2) flat out ivec3 outVertexPos;
 
 layout(buffer_reference, std430) readonly buffer FaceBuffer {
     uint faces[];
@@ -109,7 +110,7 @@ layout(push_constant) uniform constants {
 UnpackedFaceData unpack_face_data(uint packed) {
     return UnpackedFaceData(
         packed >> 15, // face
-        vec3( // Position
+        ivec3( // Position
             packed & 0x1Fu,
             (packed >> 5) & 0x1Fu,
             (packed >> 10) & 0x1Fu
@@ -128,6 +129,7 @@ void main() {
 
     outNormal = face.normal;
     outUV = UV[gl_VertexIndex];
+    outVertexPos = unpacked_face.pos;
 
-    gl_Position = PushConstants.mvp * vec4(face.vertices[gl_VertexIndex] + unpacked_face.pos, 1.0f);
+    gl_Position = PushConstants.mvp * vec4(face.vertices[gl_VertexIndex] + vec3(unpacked_face.pos), 1.0f);
 }
